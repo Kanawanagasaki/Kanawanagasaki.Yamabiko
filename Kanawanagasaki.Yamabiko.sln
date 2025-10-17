@@ -1,0 +1,49 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36414.22
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kanawanagasaki.Yamabiko", "Kanawanagasaki.Yamabiko\Kanawanagasaki.Yamabiko.csproj", "{7FCBFCA6-2665-46F7-86A1-575D56A7DA59}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kanawanagasaki.Yamabiko.Shared", "Kanawanagasaki.Yamabiko.Shared\Kanawanagasaki.Yamabiko.Shared.csproj", "{44FE5177-0B46-4DA3-ACC5-80B688A4C4F7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kanawanagasaki.Yamabiko.Server", "Kanawanagasaki.Yamabiko.Server\Kanawanagasaki.Yamabiko.Server.csproj", "{FF9D56AE-D65B-4F05-A792-EF2AFE1332D2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kanawanagasaki.Yamabiko.Test", "Kanawanagasaki.Yamabiko.Test\Kanawanagasaki.Yamabiko.Test.csproj", "{D95E8408-0824-47A4-B92F-EE545D20F623}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kanawanagasaki.Yamabiko.Dtls", "Kanawanagasaki.Yamabiko.Dtls\Kanawanagasaki.Yamabiko.Dtls.csproj", "{3CF93AC4-32D2-4A03-B177-F8A0CCCDB176}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7FCBFCA6-2665-46F7-86A1-575D56A7DA59}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7FCBFCA6-2665-46F7-86A1-575D56A7DA59}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7FCBFCA6-2665-46F7-86A1-575D56A7DA59}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7FCBFCA6-2665-46F7-86A1-575D56A7DA59}.Release|Any CPU.Build.0 = Release|Any CPU
+		{44FE5177-0B46-4DA3-ACC5-80B688A4C4F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{44FE5177-0B46-4DA3-ACC5-80B688A4C4F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{44FE5177-0B46-4DA3-ACC5-80B688A4C4F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{44FE5177-0B46-4DA3-ACC5-80B688A4C4F7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FF9D56AE-D65B-4F05-A792-EF2AFE1332D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF9D56AE-D65B-4F05-A792-EF2AFE1332D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF9D56AE-D65B-4F05-A792-EF2AFE1332D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF9D56AE-D65B-4F05-A792-EF2AFE1332D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D95E8408-0824-47A4-B92F-EE545D20F623}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D95E8408-0824-47A4-B92F-EE545D20F623}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D95E8408-0824-47A4-B92F-EE545D20F623}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D95E8408-0824-47A4-B92F-EE545D20F623}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3CF93AC4-32D2-4A03-B177-F8A0CCCDB176}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3CF93AC4-32D2-4A03-B177-F8A0CCCDB176}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3CF93AC4-32D2-4A03-B177-F8A0CCCDB176}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3CF93AC4-32D2-4A03-B177-F8A0CCCDB176}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7D10947D-4CB2-45EC-9636-CD7F6EA6DDCC}
+	EndGlobalSection
+EndGlobal
