@@ -55,7 +55,10 @@ public class ServerHandshakeProcessor : IDisposable
     public IEnumerable<byte[]> ProcessPacket(ReadOnlyMemory<byte> buffer)
     {
         if (buffer.Length <= 0)
+        {
+            yield return WriteAlertPlainText(EAlertType.DECODE_ERROR);
             yield break;
+        }
 
         int offset = 0;
 
@@ -90,7 +93,10 @@ public class ServerHandshakeProcessor : IDisposable
     private IEnumerable<byte[]> ProcessFragment(HandshakeFragment fragment)
     {
         if (1 < fragment.SequenceNumber)
+        {
+            yield return WriteAlertPlainText(EAlertType.DECODE_ERROR);
             yield break;
+        }
 
         if (!_clientSeqNumToMessage.TryGetValue(fragment.SequenceNumber, out var message))
             _clientSeqNumToMessage[fragment.SequenceNumber] = message = new HandshakeMessage(fragment);
@@ -136,6 +142,9 @@ public class ServerHandshakeProcessor : IDisposable
                         yield return packet;
                     break;
                 }
+            default:
+                yield return WriteAlertCipherText(EAlertType.HANDSHAKE_FAILURE, 2, 0) ?? WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
+                break;
         }
     }
 
@@ -145,7 +154,10 @@ public class ServerHandshakeProcessor : IDisposable
             yield break;
 
         if (!clientHello.CipherSuites.Contains(ECipherSuite.TLS_AES_128_GCM_SHA256))
+        {
+            yield return WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
             yield break;
+        }
 
         KeyShareExtension? keyShare = null;
         SupportedVersionsExtension? supportedVersions = null;
@@ -168,31 +180,61 @@ public class ServerHandshakeProcessor : IDisposable
         }
 
         if (keyShare is null)
+        {
+            yield return WriteAlertPlainText(EAlertType.MISSING_EXTENSION);
             yield break;
+        }
         if (!keyShare.GroupToKey.ContainsKey(ENamedGroup.X25519))
+        {
+            yield return WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
             yield break;
+        }
 
         var clientPublicKey = keyShare.GroupToKey[ENamedGroup.X25519];
         if (clientPublicKey.Length != 32)
+        {
+            yield return WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
             yield break;
+        }
 
         if (supportedVersions is null)
+        {
+            yield return WriteAlertPlainText(EAlertType.MISSING_EXTENSION);
             yield break;
+        }
         if (!supportedVersions.Versions.Contains(EVersions.DTLS1_3))
+        {
+            yield return WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
             yield break;
+        }
 
         if (signatureAlgorithms is null)
+        {
+            yield return WriteAlertPlainText(EAlertType.MISSING_EXTENSION);
             yield break;
+        }
         if (!signatureAlgorithms.Algorithms.Contains(ESignatureAlgorithm.RSA_PSS_RSAE_SHA256))
+        {
+            yield return WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
             yield break;
+        }
 
         if (encryptThenMac is null)
+        {
+            yield return WriteAlertPlainText(EAlertType.MISSING_EXTENSION);
             yield break;
+        }
 
         if (supportedGroups is null)
+        {
+            yield return WriteAlertPlainText(EAlertType.MISSING_EXTENSION);
             yield break;
+        }
         if (!supportedGroups.Groups.Contains(ENamedGroup.X25519))
+        {
+            yield return WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
             yield break;
+        }
 
         var privateKey = RandomNumberGenerator.GetBytes(32);
         var publicKey = KeyHashHelper.GenerateX25519PublicKey(privateKey);
@@ -274,7 +316,10 @@ public class ServerHandshakeProcessor : IDisposable
 
         using var rsa = _certificate.GetRSAPrivateKey();
         if (rsa is null)
+        {
+            yield return WriteAlertPlainText(EAlertType.INTERNAL_ERROR);
             throw new InvalidOperationException("The server certificate does not contain an RSA private key");
+        }
 
         var signature = rsa.SignData(toSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
 
@@ -299,44 +344,51 @@ public class ServerHandshakeProcessor : IDisposable
         var serverFinishedMessage = new HandshakeMessage(serverFinished, 4);
         foreach (var buffer in SerializeCipherText(serverFinishedMessage, 2, 3))
             yield return buffer;
+
+        ClientApplicationKey = null;
+        ServerApplicationKey = null;
+        ClientApplicationIV = null;
+        ServerApplicationIV = null;
+        ClientRecordNumberKey = null;
+        ServerRecordNumberKey = null;
     }
 
-    private byte[]? ProcessClientFinished(FinishedHandshake clientFinished)
+    private byte[] ProcessClientFinished(FinishedHandshake clientFinished)
     {
         if (_clientSecret is null)
-            return null;
+            return WriteAlertCipherText(EAlertType.INTERNAL_ERROR, 2, 4) ?? WriteAlertPlainText(EAlertType.INTERNAL_ERROR);
         if (_handshakeSecret is null)
-            return null;
+            return WriteAlertCipherText(EAlertType.INTERNAL_ERROR, 2, 4) ?? WriteAlertPlainText(EAlertType.INTERNAL_ERROR);
 
         if (!_clientSeqNumToMessage.TryGetValue(0, out var clientHelloMessage))
-            return null;
+            return WriteAlertCipherText(EAlertType.HANDSHAKE_FAILURE, 2, 4) ?? WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
         if (clientHelloMessage.Handshake is not ClientHelloHandshake)
-            return null;
+            return WriteAlertCipherText(EAlertType.INTERNAL_ERROR, 2, 4) ?? WriteAlertPlainText(EAlertType.INTERNAL_ERROR);
 
         if (!_serverSeqNumToMessage.TryGetValue(0, out var serverHelloMessage))
-            return null;
+            return WriteAlertCipherText(EAlertType.HANDSHAKE_FAILURE, 2, 4) ?? WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
         if (serverHelloMessage.Handshake is not ServerHelloHandshake)
-            return null;
+            return WriteAlertCipherText(EAlertType.INTERNAL_ERROR, 2, 4) ?? WriteAlertPlainText(EAlertType.INTERNAL_ERROR);
 
         if (!_serverSeqNumToMessage.TryGetValue(1, out var encryptedExtensionsMessage))
-            return null;
+            return WriteAlertCipherText(EAlertType.HANDSHAKE_FAILURE, 2, 4) ?? WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
         if (encryptedExtensionsMessage.Handshake is not EncryptedExtensionsHandshake)
-            return null;
+            return WriteAlertCipherText(EAlertType.INTERNAL_ERROR, 2, 4) ?? WriteAlertPlainText(EAlertType.INTERNAL_ERROR);
 
         if (!_serverSeqNumToMessage.TryGetValue(2, out var serverCertificateMessage))
-            return null;
+            return WriteAlertCipherText(EAlertType.HANDSHAKE_FAILURE, 2, 4) ?? WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
         if (serverCertificateMessage.Handshake is not ServerCertificateHandshake)
-            return null;
+            return WriteAlertCipherText(EAlertType.INTERNAL_ERROR, 2, 4) ?? WriteAlertPlainText(EAlertType.INTERNAL_ERROR);
 
         if (!_serverSeqNumToMessage.TryGetValue(3, out var serverCertVerifyMessage))
-            return null;
+            return WriteAlertCipherText(EAlertType.HANDSHAKE_FAILURE, 2, 4) ?? WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
         if (serverCertVerifyMessage.Handshake is not ServerCertVerifyHandshake)
-            return null;
+            return WriteAlertCipherText(EAlertType.INTERNAL_ERROR, 2, 4) ?? WriteAlertPlainText(EAlertType.INTERNAL_ERROR);
 
         if (!_serverSeqNumToMessage.TryGetValue(4, out var serverFinishedMessage))
-            return null;
+            return WriteAlertCipherText(EAlertType.HANDSHAKE_FAILURE, 2, 4) ?? WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
         if (serverFinishedMessage.Handshake is not FinishedHandshake)
-            return null;
+            return WriteAlertCipherText(EAlertType.INTERNAL_ERROR, 2, 4) ?? WriteAlertPlainText(EAlertType.INTERNAL_ERROR);
 
         var finishedKey = KeyHashHelper.HKDF_ExpandLabel(_clientSecret, "finished", Array.Empty<byte>(), 32, HKDF_PREFIX);
         var hash = KeyHashHelper.HashFragments(
@@ -353,7 +405,7 @@ public class ServerHandshakeProcessor : IDisposable
         var verifyData = HMACSHA256.HashData(finishedKey, hash);
 
         if (!CryptographicOperations.FixedTimeEquals(clientFinished.VerifyData, verifyData))
-            return null;
+            return WriteAlertCipherText(EAlertType.HANDSHAKE_FAILURE, 2, 4) ?? WriteAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
 
         var zeros = new byte[32];
         var derivedSecret = KeyHashHelper.HKDF_ExpandLabel(_handshakeSecret, "derived", Array.Empty<byte>(), 32, HKDF_PREFIX);
@@ -367,6 +419,15 @@ public class ServerHandshakeProcessor : IDisposable
         ServerApplicationIV = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "iv", Array.Empty<byte>(), 12, HKDF_PREFIX);
         ClientRecordNumberKey = KeyHashHelper.HKDF_ExpandLabel(clientSecret, "sn", Array.Empty<byte>(), 16, HKDF_PREFIX);
         ServerRecordNumberKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "sn", Array.Empty<byte>(), 16, HKDF_PREFIX);
+
+        _serverHandshakeAes?.Dispose();
+        _serverHandshakeAes = null;
+        _serverRecordNumberAes?.Dispose();
+        _serverRecordNumberAes = null;
+        _clientHandshakeAes?.Dispose();
+        _clientHandshakeAes = null;
+        _clientRecordNumberAes?.Dispose();
+        _clientRecordNumberAes = null;
 
         var ack = new Ack(2, 0);
         var ackBuffer = new byte[ack.Length()];
@@ -388,6 +449,49 @@ public class ServerHandshakeProcessor : IDisposable
 
         var recordBuffer = new byte[record.Length()];
         record.EncryptAndWrite(recordBuffer, ackAes, ServerApplicationIV, ackHeaderAes);
+
+        return recordBuffer;
+    }
+
+    private byte[] WriteAlertPlainText(EAlertType type)
+    {
+        var alert = new Alert(type);
+        var alertBuffer = new byte[alert.Length()];
+        alert.Write(alertBuffer);
+
+        var record = new PlainTextRecord(alertBuffer)
+        {
+            Type = ERecordType.ALERT,
+            KeyEpoch = 0,
+            RecordNumber = 0
+        };
+        var recordBuffer = new byte[record.Length()];
+        record.Write(recordBuffer);
+
+        return recordBuffer;
+    }
+
+    private byte[]? WriteAlertCipherText(EAlertType type, byte epoch, ushort recordNumber)
+    {
+        if (_serverHandshakeAes is null)
+            return null;
+        if (_serverHandshakeIV is null)
+            return null;
+        if (_serverRecordNumberAes is null)
+            return null;
+
+        var alert = new Alert(type);
+        var alertBuffer = new byte[alert.Length()];
+        alert.Write(alertBuffer);
+
+        var record = new CipherTextRecord(alertBuffer)
+        {
+            Type = ERecordType.ALERT,
+            EpochLowBits = epoch,
+            RecordNumber = recordNumber
+        };
+        var recordBuffer = new byte[record.Length()];
+        record.EncryptAndWrite(recordBuffer, _serverHandshakeAes, _serverHandshakeIV, _serverRecordNumberAes);
 
         return recordBuffer;
     }
