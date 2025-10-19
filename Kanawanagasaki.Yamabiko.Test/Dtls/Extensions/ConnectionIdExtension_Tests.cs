@@ -9,7 +9,7 @@ public class ConnectionIdExtension_Tests
     [Fact]
     public void Write_UsingRfc4122GuidBytes_WireMatchesRfc4122()
     {
-        var rfcBytes = GuidToRfc4122Bytes(FixedGuid);
+        var rfcBytes = FixedGuid.ToByteArray(true);
         var extension = new ConnectionIdExtension(rfcBytes);
 
         var length = extension.Length(true);
@@ -25,7 +25,7 @@ public class ConnectionIdExtension_Tests
     [Fact]
     public void Parse_WireRfc4122Bytes_CanConvertBackToGuid()
     {
-        var rfcBytes = GuidToRfc4122Bytes(FixedGuid);
+        var rfcBytes = FixedGuid.ToByteArray(true);
 
         var data = new byte[1 + rfcBytes.Length];
         data[0] = (byte)rfcBytes.Length;
@@ -35,14 +35,14 @@ public class ConnectionIdExtension_Tests
 
         Assert.Equal(rfcBytes, ext.ConnectionId);
 
-        var guid = Rfc4122BytesToGuid(ext.ConnectionId);
+        var guid = new Guid(ext.ConnectionId, true);
         Assert.Equal(FixedGuid, guid);
     }
 
     [Fact]
     public void RoundTrip_WithGuid_ConvertsProperly()
     {
-        var rfcBytes = GuidToRfc4122Bytes(FixedGuid);
+        var rfcBytes = FixedGuid.ToByteArray(true);
         var extOut = new ConnectionIdExtension(rfcBytes);
 
         var buf = new byte[extOut.Length(true)];
@@ -52,40 +52,7 @@ public class ConnectionIdExtension_Tests
 
         Assert.Equal(rfcBytes, parsed.ConnectionId);
 
-        var guid = Rfc4122BytesToGuid(parsed.ConnectionId);
+        var guid = new Guid(parsed.ConnectionId, true);
         Assert.Equal(FixedGuid, guid);
-    }
-
-    public static byte[] GuidToRfc4122Bytes(Guid g)
-    {
-        var b = g.ToByteArray();
-        return
-        [
-            b[3], b[2], b[1], b[0],
-            b[5], b[4],
-            b[7], b[6],
-            b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]
-        ];
-    }
-
-    public static Guid Rfc4122BytesToGuid(ReadOnlySpan<byte> netBytes)
-    {
-        if (netBytes.Length != 16)
-            throw new ArgumentException("RFC4122 UUID must be 16 bytes", nameof(netBytes));
-
-        var b = new byte[16];
-        b[0] = netBytes[3];
-        b[1] = netBytes[2];
-        b[2] = netBytes[1];
-        b[3] = netBytes[0];
-        b[4] = netBytes[5];
-        b[5] = netBytes[4];
-        b[6] = netBytes[7];
-        b[7] = netBytes[6];
-
-        for (int i = 8; i < 16; i++)
-            b[i] = netBytes[i];
-
-        return new Guid(b);
     }
 }

@@ -102,6 +102,8 @@ public class CipherTextRecord
         => DecryptAndParse(buffer, aes, iv, headerAes, null, ref offset);
     public static CipherTextRecord DecryptAndParse(ReadOnlySpan<byte> buffer, AesGcm aes, ReadOnlySpan<byte> iv, Aes headerAes, int? connectionIdLength, ref int offset)
     {
+        int startOffset = offset;
+
         if (aes.TagSizeInBytes != AesGcm.TagByteSizes.MaxSize)
             throw new ArgumentException($"Tag size in bytes must be {AesGcm.TagByteSizes.MaxSize} bytes long", nameof(aes));
         if (iv.Length != AesGcm.NonceByteSizes.MaxSize)
@@ -184,10 +186,10 @@ public class CipherTextRecord
         for (int i = 1; i <= sequenceNumBytes.Length && i <= recordIv.Length; i++)
             recordIv[^i] ^= sequenceNumBytes[^i];
 
-        Span<byte> associatedData = stackalloc byte[offset];
-        buffer[0..offset].CopyTo(associatedData);
+        Span<byte> associatedData = stackalloc byte[offset - startOffset];
+        buffer[startOffset..offset].CopyTo(associatedData);
         for (int i = 0; i < sequenceNumBytes.Length; i++)
-            associatedData[sequenceNumOffset + i] = sequenceNumBytes[i];
+            associatedData[sequenceNumOffset + i - startOffset] = sequenceNumBytes[i];
 
         var data = new byte[encryptedSpan.Length];
         aes.Decrypt(recordIv, encryptedSpan, tagSpan, data, associatedData);

@@ -71,6 +71,8 @@ public class Dtls_Tests(ITestOutputHelper _output)
 
         await clientProcessor.RunAsync();
 
+        _output.WriteLine($"sent: {sent}, received: {received}");
+
         Assert.Equal(EClientHandshakeState.DONE, clientProcessor.State);
 
         if (mtu == 0xFFFF)
@@ -224,6 +226,203 @@ public class Dtls_Tests(ITestOutputHelper _output)
         await clientProcessor.RunAsync();
 
         _output.WriteLine("Dropped: " + dropped);
+
+        Assert.Equal(EClientHandshakeState.DONE, clientProcessor.State);
+
+        Assert.Equal(serverProcessor.ServerApplicationKey, clientProcessor.ServerApplicationKey);
+        Assert.Equal(serverProcessor.ServerApplicationIV, clientProcessor.ServerApplicationIV);
+        Assert.Equal(serverProcessor.ClientApplicationKey, clientProcessor.ClientApplicationKey);
+        Assert.Equal(serverProcessor.ClientApplicationIV, clientProcessor.ClientApplicationIV);
+        Assert.Equal(serverProcessor.ServerRecordNumberKey, clientProcessor.ServerRecordNumberKey);
+        Assert.Equal(serverProcessor.ClientRecordNumberKey, clientProcessor.ClientRecordNumberKey);
+    }
+
+    [Theory]
+    [InlineData(0xFFFF)]
+    [InlineData(1400)]
+    [InlineData(1024)]
+    [InlineData(512)]
+    [InlineData(256)]
+    [InlineData(128)]
+    [InlineData(64)]
+    public async Task Handshake_100Percent_Ordered_MultipleRecordsInPacket(int mtu)
+    {
+        var domain = "example.com";
+        using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
+
+        var serverProcessor = new ServerHandshakeProcessor(certificate, mtu);
+
+        var packetsFromServer = new List<byte[]>();
+
+        int sent = 0;
+        int received = 0;
+
+        var clientProcessor = new TestClientHandshakeProcessor
+        (
+            mtu: mtu,
+            domain: domain,
+            receiveFunc: (_) =>
+            {
+                received++;
+
+                if (0 < packetsFromServer.Count)
+                {
+                    var packet = packetsFromServer[0];
+                    packetsFromServer.RemoveAt(0);
+
+                    Assert.True(packet.Length <= mtu, $"packet.Length: {packet.Length}, mtu: {mtu}");
+
+                    return Task.FromResult(new ReadOnlyMemory<byte>(packet));
+                }
+                else
+                {
+                    return Task.FromResult(new ReadOnlyMemory<byte>());
+                }
+            },
+            sendFunc: (buffer, _) =>
+            {
+                sent++;
+
+                Assert.True(buffer.Length <= mtu, $"buffer.Length: {buffer.Length}, mtu: {mtu}");
+
+                var packets = serverProcessor.ProcessPacket(buffer);
+
+                using var ms = new MemoryStream();
+                foreach (var packet in packets)
+                {
+                    if (mtu < ms.Length + packet.Length)
+                    {
+                        packetsFromServer.Add(ms.ToArray());
+                        ms.SetLength(0);
+                    }
+
+                    ms.Write(packet);
+                }
+
+                if (0 < ms.Length)
+                    packetsFromServer.Add(ms.ToArray());
+
+                return Task.CompletedTask;
+            }
+        )
+        {
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+
+        await clientProcessor.RunAsync();
+
+        _output.WriteLine($"sent: {sent}, received: {received}");
+
+        Assert.Equal(EClientHandshakeState.DONE, clientProcessor.State);
+
+        if (mtu == 0xFFFF)
+        {
+            Assert.Equal(2, sent);
+            Assert.Equal(2, received);
+        }
+
+        Assert.Equal(serverProcessor.ServerApplicationKey, clientProcessor.ServerApplicationKey);
+        Assert.Equal(serverProcessor.ServerApplicationIV, clientProcessor.ServerApplicationIV);
+        Assert.Equal(serverProcessor.ClientApplicationKey, clientProcessor.ClientApplicationKey);
+        Assert.Equal(serverProcessor.ClientApplicationIV, clientProcessor.ClientApplicationIV);
+        Assert.Equal(serverProcessor.ServerRecordNumberKey, clientProcessor.ServerRecordNumberKey);
+        Assert.Equal(serverProcessor.ClientRecordNumberKey, clientProcessor.ClientRecordNumberKey);
+    }
+
+    [Theory]
+    [InlineData(0xFFFF)]
+    [InlineData(1400)]
+    [InlineData(1024)]
+    [InlineData(512)]
+    [InlineData(256)]
+    [InlineData(128)]
+    [InlineData(64)]
+    public async Task Handshake_75Percent_Unordered_MultipleRecordsInPacket(int mtu)
+    {
+        var domain = "example.com";
+        using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
+
+        var serverProcessor = new ServerHandshakeProcessor(certificate, mtu);
+
+        var packetsFromServer = new List<byte[]>();
+
+        int sent = 0;
+        int received = 0;
+        int dropped = 0;
+
+        var clientProcessor = new TestClientHandshakeProcessor
+        (
+            mtu: mtu,
+            domain: domain,
+            receiveFunc: async (_) =>
+            {
+                received++;
+
+                if (0 < packetsFromServer.Count)
+                {
+                    var packet = packetsFromServer[0];
+                    packetsFromServer.RemoveAt(0);
+
+                    if (0.75 < Random.Shared.NextDouble())
+                    {
+                        dropped++;
+                        return new ReadOnlyMemory<byte>();
+                    }
+                    else
+                    {
+                        if (0.75 < Random.Shared.NextDouble())
+                            await Task.Delay(50);
+
+                        return new ReadOnlyMemory<byte>(packet);
+                    }
+                }
+                else
+                {
+                    return new ReadOnlyMemory<byte>();
+                }
+            },
+            sendFunc: (buffer, _) =>
+            {
+                if (0.75 < Random.Shared.NextDouble())
+                {
+                    dropped++;
+                    return Task.CompletedTask;
+                }
+
+                sent++;
+
+                Assert.True(buffer.Length <= mtu, $"buffer.Length: {buffer.Length}, mtu: {mtu}");
+
+                var packets = serverProcessor.ProcessPacket(buffer);
+
+                using var ms = new MemoryStream();
+                foreach (var packet in packets)
+                {
+                    if (mtu < ms.Length + packet.Length)
+                    {
+                        packetsFromServer.Add(ms.ToArray());
+                        ms.SetLength(0);
+                    }
+
+                    ms.Write(packet);
+                }
+
+                if (0 < ms.Length)
+                    packetsFromServer.Add(ms.ToArray());
+
+                packetsFromServer = packetsFromServer.OrderBy(x => Random.Shared.NextDouble()).ToList();
+
+                return Task.CompletedTask;
+            }
+        )
+        {
+            Timeout = TimeSpan.FromMinutes(10),
+            ResendInterval = TimeSpan.FromMilliseconds(25)
+        };
+
+        await clientProcessor.RunAsync();
+
+        _output.WriteLine($"sent: {sent}, received: {received}, dropped: {dropped}");
 
         Assert.Equal(EClientHandshakeState.DONE, clientProcessor.State);
 

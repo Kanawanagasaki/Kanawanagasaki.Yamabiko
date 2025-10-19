@@ -15,7 +15,7 @@ public abstract class ClientHandshakeProcessor : IDisposable
     private const string HKDF_PREFIX = "dtls13";
     private static readonly byte[] CERT_VERIFY_PREFIX = [0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x54, 0x4C, 0x53, 0x20, 0x31, 0x2E, 0x33, 0x2C, 0x20, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x20, 0x43, 0x65, 0x72, 0x74, 0x69, 0x66, 0x69, 0x63, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x79, 0x00];
 
-    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(909999);
+    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(90);
     public TimeSpan ResendInterval { get; set; } = TimeSpan.FromSeconds(3);
 
     public EClientHandshakeState State { get; private set; } = EClientHandshakeState.NONE;
@@ -164,14 +164,12 @@ public abstract class ClientHandshakeProcessor : IDisposable
                 {
                     var buffer = await receiveTask;
                     if (0 < buffer.Length)
-                        ParsePacket(buffer);
+                        await ParsePacket(buffer, ct);
                     else
                         await ResendAsync(ct);
                 }
                 else
                     await ResendAsync(ct);
-
-                await TryProcessNextHandshakeMessage(ct);
             }
         }
         catch
@@ -233,27 +231,25 @@ public abstract class ClientHandshakeProcessor : IDisposable
         }
     }
 
-    private void ParsePacket(ReadOnlyMemory<byte> buffer)
+    private async Task ParsePacket(ReadOnlyMemory<byte> buffer, CancellationToken ct)
     {
-        var span = buffer.Span;
-
-        if (span.Length <= 0)
+        if (buffer.Length <= 0)
             return;
 
         int offset = 0;
 
-        while (offset < span.Length)
+        while (offset < buffer.Length)
         {
-            if ((span[offset] & (byte)EHeaderFlags.FIXED_BITS) == CipherTextRecord.HEADER_BITS)
+            if ((buffer.Span[offset] & (byte)EHeaderFlags.FIXED_BITS) == CipherTextRecord.HEADER_BITS)
             {
                 CipherTextRecord record;
-                var epoch = span[offset] & (byte)EHeaderFlags.ENCRYPTION_EPOCH;
+                var epoch = buffer.Span[offset] & (byte)EHeaderFlags.ENCRYPTION_EPOCH;
                 if (epoch == 2)
                 {
                     if (_serverHandshakeAes is null || _serverRecordNumberAes is null)
                         return;
 
-                    record = CipherTextRecord.DecryptAndParse(span, _serverHandshakeAes, _serverHandshakeIV, _serverRecordNumberAes, ref offset);
+                    record = CipherTextRecord.DecryptAndParse(buffer.Span, _serverHandshakeAes, _serverHandshakeIV, _serverRecordNumberAes, ref offset);
                 }
                 else if (epoch == 3)
                 {
@@ -268,7 +264,7 @@ public abstract class ClientHandshakeProcessor : IDisposable
                     ackHeaderAes.Mode = CipherMode.ECB;
                     ackHeaderAes.Padding = PaddingMode.None;
 
-                    record = CipherTextRecord.DecryptAndParse(span, ackAes, ServerApplicationIV, ackHeaderAes, ref offset);
+                    record = CipherTextRecord.DecryptAndParse(buffer.Span, ackAes, ServerApplicationIV, ackHeaderAes, ref offset);
                 }
                 else return;
 
@@ -278,16 +274,18 @@ public abstract class ClientHandshakeProcessor : IDisposable
                 {
                     var handshakeFragment = HandshakeFragment.Parse(record.Buffer);
                     ParseFragment(handshakeFragment);
+                    await TryProcessNextHandshakeMessage(ct);
                 }
             }
             else
             {
-                var record = PlainTextRecord.Parse(span, ref offset);
+                var record = PlainTextRecord.Parse(buffer.Span, ref offset);
                 if (record.Type is not ERecordType.HANDSHAKE)
                     return;
 
                 var handshakeFragment = HandshakeFragment.Parse(record.Buffer);
                 ParseFragment(handshakeFragment);
+                await TryProcessNextHandshakeMessage(ct);
             }
         }
     }
