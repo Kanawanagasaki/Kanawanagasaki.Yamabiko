@@ -10,9 +10,9 @@ public class PeerPacket_Tests
         {
             PeerId = Guid.NewGuid(),
             ProjectId = Guid.NewGuid(),
-            Name = Random.Shared.NextDouble() < 0.5 ? null : RandomAsciiString(Random.Shared.Next(0, 200)),
-            Extra = RandomNumberGenerator.GetBytes(Random.Shared.Next(0, 200)),
+            Name = RandomAsciiString(Random.Shared.Next(0, 200)),
             Flags = BitConverter.ToUInt64(RandomNumberGenerator.GetBytes(8), 0),
+            ExtraTags = RandomNumberGenerator.GetBytes(255).Distinct().ToArray(),
             Index = (ushort)Random.Shared.Next(0, ushort.MaxValue)
         };
 
@@ -37,8 +37,8 @@ public class PeerPacket_Tests
         Assert.Equal(packet.PeerId, parsed.PeerId);
         Assert.Equal(packet.ProjectId, parsed.ProjectId);
         Assert.Equal(packet.Name, parsed.Name);
-        Assert.Equal(packet.Extra, parsed.Extra);
         Assert.Equal(packet.Flags, parsed.Flags);
+        Assert.Equal(packet.ExtraTags, parsed.ExtraTags);
         Assert.Equal(packet.Index, parsed.Index);
     }
 

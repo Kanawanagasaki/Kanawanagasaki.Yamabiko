@@ -10,9 +10,8 @@ public class AdvertisePacketTests
         => new AdvertisePacket
         {
             ProjectId = Guid.NewGuid(),
-            Name = Random.Shared.NextDouble() < 0.5 ? null : RandomAsciiString(Random.Shared.Next(0, 200)),
+            Name = RandomAsciiString(Random.Shared.Next(0, 200)),
             Password = Random.Shared.NextDouble() < 0.5 ? null : RandomAsciiString(Random.Shared.Next(0, 200)),
-            Extra = RandomNumberGenerator.GetBytes(Random.Shared.Next(0, 200)),
             Flags = BitConverter.ToUInt64(RandomNumberGenerator.GetBytes(8), 0)
         };
 
@@ -37,7 +36,6 @@ public class AdvertisePacketTests
         Assert.Equal(packet.ProjectId, parsed.ProjectId);
         Assert.Equal(packet.Name, parsed.Name);
         Assert.Equal(packet.Password, parsed.Password);
-        Assert.Equal(packet.Extra, parsed.Extra);
         Assert.Equal(packet.Flags, parsed.Flags);
     }
 

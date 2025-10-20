@@ -1,6 +1,7 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Shared.Packets;
 
 using Kanawanagasaki.Yamabiko.Shared.Enums;
+using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using System;
 
 public class SubscribePacket : Packet
@@ -11,23 +12,29 @@ public class SubscribePacket : Packet
     public required Guid ProjectId { get; init; }
 
     protected override int InternalLength()
-        => 16;
+        => BinaryHelper.BytesCount(ProjectId);
 
     protected override void InternalWrite(Span<byte> buffer)
     {
-        ProjectId.TryWriteBytes(buffer, true, out _);
+        int offset = 0;
+        BinaryHelper.Write(ProjectId, buffer, ref offset);
     }
 
     public static SubscribePacket InternalParse(ReadOnlySpan<byte> buffer)
     {
-        if (buffer.Length < 16)
-            throw new FormatException("Buffer too short: cannot read project id");
-
-        var projectId = new Guid(buffer.Slice(0, 16), true);
-
-        return new SubscribePacket
+        try
         {
-            ProjectId = projectId
-        };
+            int offset = 0;
+            var projectId = BinaryHelper.ReadGuid(buffer, ref offset);
+
+            return new SubscribePacket
+            {
+                ProjectId = projectId
+            };
+        }
+        catch
+        {
+            throw new FormatException("Failed to parse " + nameof(SubscribePacket));
+        }
     }
 }

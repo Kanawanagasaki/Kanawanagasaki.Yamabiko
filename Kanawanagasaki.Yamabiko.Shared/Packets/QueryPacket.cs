@@ -1,6 +1,7 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Shared.Packets;
 
 using Kanawanagasaki.Yamabiko.Shared.Enums;
+using Kanawanagasaki.Yamabiko.Shared.Helpers;
 
 public class QueryPacket : Packet
 {
@@ -15,6 +16,22 @@ public class QueryPacket : Packet
 
     public EOrderBy OrderBy { get; init; } = EOrderBy.NAME_ASC;
 
+    public byte FilterTag { get; init; }
+
+    private byte[]? _filter;
+    public byte[]? Filter
+    {
+        get => _filter;
+        init
+        {
+            if (value is not null && 255 < value.Length)
+                throw new FormatException("Filter is too long");
+            _filter = value;
+        }
+    }
+
+    public EFilterOperation FilterOperation { get; init; }
+
     public ushort Skip { get; init; } = 0;
 
     public byte Count { get; init; } = 24;
@@ -23,17 +40,23 @@ public class QueryPacket : Packet
     {
         int len = 0;
 
-        len += 16; // project id
+        len += BinaryHelper.BytesCount(ProjectId);
 
-        len += 8; // flags
+        len += BinaryHelper.BytesCount(Flags);
 
-        len += 1; // protection level
+        len += 1; // ProtectionLevel
 
-        len += 1; // order by
+        len += 1; // OrderBy
 
-        len += 2; // skip
+        len += 1; // Filter tag
 
-        len += 1; // count
+        len += BinaryHelper.BytesCount(Filter);
+
+        len += 1; // Filter operation
+
+        len += BinaryHelper.BytesCount(Skip);
+
+        len += 1; // Count
 
         return len;
     }
@@ -42,73 +65,65 @@ public class QueryPacket : Packet
     {
         int offset = 0;
 
-        ProjectId.TryWriteBytes(buffer.Slice(offset, 16), true, out _);
-        offset += 16;
+        BinaryHelper.Write(ProjectId, buffer, ref offset);
 
-        buffer[offset++] = (byte)((Flags >> 56) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 48) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 40) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 32) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 24) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 16) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 8) & 0xFF);
-        buffer[offset++] = (byte)(Flags & 0xFF);
+        BinaryHelper.Write(Flags, buffer, ref offset);
 
         buffer[offset++] = (byte)ProtectionLevel;
 
         buffer[offset++] = (byte)OrderBy;
 
-        buffer[offset++] = (byte)((Skip >> 8) & 0xFF);
-        buffer[offset++] = (byte)(Skip & 0xFF);
+        buffer[offset++] = FilterTag;
+
+        BinaryHelper.Write(Filter, buffer, ref offset);
+
+        buffer[offset++] = (byte)FilterOperation;
+
+        BinaryHelper.Write(Skip, buffer, ref offset);
 
         buffer[offset++] = Count;
     }
 
     public static QueryPacket InternalParse(ReadOnlySpan<byte> buffer)
     {
-        int offset = 0;
-
-        if (buffer.Length < offset + 16)
-            throw new FormatException("Buffer too small: cannot read project ID");
-
-        var projectId = new Guid(buffer.Slice(offset, 16), true);
-        offset += 16;
-
-        if (buffer.Length < offset + 8)
-            throw new FormatException("Buffer too small: cannot read flags");
-        var flags = ((ulong)buffer[offset++] << 56)
-                  | ((ulong)buffer[offset++] << 48)
-                  | ((ulong)buffer[offset++] << 40)
-                  | ((ulong)buffer[offset++] << 32)
-                  | ((ulong)buffer[offset++] << 24)
-                  | ((ulong)buffer[offset++] << 16)
-                  | ((ulong)buffer[offset++] << 8)
-                  | buffer[offset++];
-
-        if (buffer.Length < offset + 1)
-            throw new FormatException("Buffer too small: cannot read protection level");
-        var protectionLevel = (EProtectionLevel)buffer[offset++];
-
-        if (buffer.Length < offset + 1)
-            throw new FormatException("Buffer too small: cannot read order by");
-        var orderBy = (EOrderBy)buffer[offset++];
-
-        if (buffer.Length < offset + 2)
-            throw new FormatException("Buffer too small: cannot read page");
-        var skip = (ushort)((buffer[offset++] << 8) | buffer[offset++]);
-
-        if (buffer.Length < offset + 1)
-            throw new FormatException("Buffer too small: cannot read count");
-        var count = buffer[offset++];
-
-        return new QueryPacket
+        try
         {
-            ProjectId = projectId,
-            Flags = flags,
-            ProtectionLevel = protectionLevel,
-            OrderBy = orderBy,
-            Skip = skip,
-            Count = count
-        };
+            int offset = 0;
+
+            var projectId = BinaryHelper.ReadGuid(buffer, ref offset);
+
+            var flags = BinaryHelper.ReadUInt64(buffer, ref offset);
+
+            var protectionLevel = (EProtectionLevel)buffer[offset++];
+
+            var orderBy = (EOrderBy)buffer[offset++];
+
+            var filterTag = buffer[offset++];
+
+            var filter = BinaryHelper.ReadByteArray(buffer, ref offset);
+
+            var filterOp = (EFilterOperation)buffer[offset++];
+
+            var skip = BinaryHelper.ReadUInt16(buffer, ref offset);
+
+            var count = buffer[offset++];
+
+            return new QueryPacket
+            {
+                ProjectId = projectId,
+                Flags = flags,
+                ProtectionLevel = protectionLevel,
+                OrderBy = orderBy,
+                FilterTag = filterTag,
+                Filter = filter,
+                FilterOperation = filterOp,
+                Skip = skip,
+                Count = count
+            };
+        }
+        catch
+        {
+            throw new FormatException("Failed to parse " + nameof(QueryPacket));
+        }
     }
 }

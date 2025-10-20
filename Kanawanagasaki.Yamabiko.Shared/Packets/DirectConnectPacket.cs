@@ -5,12 +5,10 @@ using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using System;
 using System.Net;
 
-public class PeerConnectPacket : Packet
+public class DirectConnectPacket : Packet
 {
-    public const EPacketType TYPE = EPacketType.PEER_CONNECT;
+    public const EPacketType TYPE = EPacketType.DIRECT_CONNECT;
     public override EPacketType Type => TYPE;
-
-    public required Guid PeerId { get; init; }
 
     private byte[] _publicKey = Array.Empty<byte>();
     public required byte[] PublicKey
@@ -31,8 +29,6 @@ public class PeerConnectPacket : Packet
     {
         int len = 0;
 
-        len += BinaryHelper.BytesCount(PeerId);
-
         len += BinaryHelper.BytesCount(PublicKey);
 
         len += BinaryHelper.BytesCount(Ip);
@@ -46,8 +42,6 @@ public class PeerConnectPacket : Packet
     {
         int offset = 0;
 
-        BinaryHelper.Write(PeerId, buffer, ref offset);
-
         BinaryHelper.Write(PublicKey, buffer, ref offset);
 
         BinaryHelper.Write(Ip, buffer, ref offset);
@@ -55,13 +49,11 @@ public class PeerConnectPacket : Packet
         BinaryHelper.Write(Port, buffer, ref offset);
     }
 
-    public static PeerConnectPacket InternalParse(ReadOnlySpan<byte> buffer)
+    public static DirectConnectPacket InternalParse(ReadOnlySpan<byte> buffer)
     {
         try
         {
             int offset = 0;
-
-            var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
 
             var publicKey = BinaryHelper.ReadByteArray(buffer, ref offset);
 
@@ -69,9 +61,8 @@ public class PeerConnectPacket : Packet
 
             var port = BinaryHelper.ReadUInt16(buffer, ref offset);
 
-            return new PeerConnectPacket
+            return new DirectConnectPacket
             {
-                PeerId = peerId,
                 PublicKey = publicKey ?? Array.Empty<byte>(),
                 Ip = ip,
                 Port = port
@@ -79,7 +70,7 @@ public class PeerConnectPacket : Packet
         }
         catch
         {
-            throw new FormatException("Failed to parse " + nameof(PeerConnectPacket));
+            throw new FormatException("Failed to parse " + nameof(ConnectPacket));
         }
     }
 }

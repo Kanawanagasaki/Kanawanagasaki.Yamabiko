@@ -1,8 +1,8 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Shared.Packets;
 
 using Kanawanagasaki.Yamabiko.Shared.Enums;
+using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using System;
-using System.Text;
 
 public class ConnectPacket : Packet
 {
@@ -11,39 +11,39 @@ public class ConnectPacket : Packet
 
     public required Guid PeerId { get; init; }
 
-    private byte[] _passwordBytes = Array.Empty<byte>();
     private string? _password;
     public string? Password
     {
         get => _password;
         init
         {
+            if (value is not null && 255 < BinaryHelper.BytesCount(value))
+                throw new FormatException("Password is too long");
             _password = value;
-            if (value is not null)
-                _passwordBytes = Encoding.UTF8.GetBytes(value);
         }
     }
 
-    public required byte[] PublicKey { get; init; }
-
-    public ConnectPacket() { }
-
-    private ConnectPacket(byte[] passwordBytes)
+    private byte[] _publicKey = Array.Empty<byte>();
+    public required byte[] PublicKey
     {
-        _passwordBytes = passwordBytes;
-        if (0 < passwordBytes.Length)
-            _password = Encoding.UTF8.GetString(passwordBytes);
+        get => _publicKey;
+        init
+        {
+            if (value.Length != 32)
+                throw new FormatException("Public key must be 32 bytes long");
+            _publicKey = value;
+        }
     }
 
     protected override int InternalLength()
     {
         int len = 0;
 
-        len += 16; // peer id
+        len += BinaryHelper.BytesCount(PeerId);
 
-        len += 1 + _passwordBytes.Length;
+        len += BinaryHelper.BytesCount(Password);
 
-        len += 1 + PublicKey.Length;
+        len += BinaryHelper.BytesCount(PublicKey);
 
         return len;
     }
@@ -52,45 +52,35 @@ public class ConnectPacket : Packet
     {
         int offset = 0;
 
-        PeerId.TryWriteBytes(buffer.Slice(offset, 16), true, out _);
-        offset += 16;
+        BinaryHelper.Write(PeerId, buffer, ref offset);
 
-        buffer[offset++] = (byte)_passwordBytes.Length;
-        _passwordBytes.CopyTo(buffer.Slice(offset, (byte)_passwordBytes.Length));
-        offset += (byte)_passwordBytes.Length;
+        BinaryHelper.Write(Password, buffer, ref offset);
 
-        buffer[offset++] = (byte)PublicKey.Length;
-        PublicKey.CopyTo(buffer.Slice(offset, (byte)PublicKey.Length));
+        BinaryHelper.Write(PublicKey, buffer, ref offset);
     }
 
     public static ConnectPacket InternalParse(ReadOnlySpan<byte> buffer)
     {
-        int offset = 0;
-
-        if (buffer.Length < offset + 16)
-            throw new FormatException("Buffer too small: cannot read peer id");
-        var peerId = new Guid(buffer.Slice(offset, 16), true);
-        offset += 16;
-
-        if (buffer.Length < offset + 1)
-            throw new FormatException("Buffer too small: cannot read password length");
-        var passwordLength = buffer[offset++];
-        if (buffer.Length < offset + passwordLength)
-            throw new FormatException("Buffer too small: cannot read password");
-        var passwordSpan = buffer.Slice(offset, passwordLength);
-        offset += passwordLength;
-
-        if (buffer.Length < offset + 1)
-            throw new FormatException("Buffer too small: cannot read public key length");
-        var publicKeyLength = buffer[offset++];
-        if (buffer.Length < offset + publicKeyLength)
-            throw new FormatException("Buffer too small: cannot read public key");
-        var publicKeySpan = buffer.Slice(offset, publicKeyLength);
-
-        return new ConnectPacket(passwordSpan.ToArray())
+        try
         {
-            PeerId = peerId,
-            PublicKey = publicKeySpan.ToArray()
-        };
+            int offset = 0;
+
+            var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
+
+            var password = BinaryHelper.ReadString(buffer, ref offset);
+
+            var publicKey = BinaryHelper.ReadByteArray(buffer, ref offset);
+
+            return new ConnectPacket
+            {
+                PeerId = peerId,
+                Password = password,
+                PublicKey = publicKey ?? Array.Empty<byte>()
+            };
+        }
+        catch
+        {
+            throw new FormatException("Failed to parse " + nameof(ConnectPacket));
+        }
     }
 }

@@ -1,49 +1,38 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Test.Packets;
 
 using Kanawanagasaki.Yamabiko.Shared.Packets;
-using System;
 using System.Security.Cryptography;
 
-public class ConnectPacket_Tests
+public class QueryExtraPacket_Tests
 {
-    private static ConnectPacket CreateRandomConnectPacket()
-        => new ConnectPacket
+    private static QueryExtraPacket CreateRandomQueryExtraPacket()
+        => new QueryExtraPacket
         {
             PeerId = Guid.NewGuid(),
-            PublicKey = RandomNumberGenerator.GetBytes(32),
-            Password = Random.Shared.NextDouble() < 0.5 ? null : RandomAsciiString(Random.Shared.Next(0, 200))
+            ExtraTags = RandomNumberGenerator.GetBytes(255).Distinct().ToArray(),
         };
-
-    private static string RandomAsciiString(int length)
-    {
-        var chars = new char[length];
-        for (int i = 0; i < length; i++)
-            chars[i] = (char)Random.Shared.Next(32, 127);
-        return new string(chars);
-    }
 
     [Fact]
     public void Write_Parse_Roundtrips_AllProperties()
     {
-        var packet = CreateRandomConnectPacket();
+        var packet = CreateRandomQueryExtraPacket();
 
         var buffer = new byte[packet.Length()];
         packet.Write(buffer);
 
-        var parsed = Assert.IsType<ConnectPacket>(Packet.Parse(buffer));
+        var parsed = Assert.IsType<QueryExtraPacket>(Packet.Parse(buffer));
 
         Assert.Equal(packet.PeerId, parsed.PeerId);
-        Assert.Equal(packet.PublicKey, parsed.PublicKey);
-        Assert.Equal(packet.Password, parsed.Password);
+        Assert.Equal(packet.ExtraTags, parsed.ExtraTags);
     }
 
     [Fact]
     public void Parse_ExistingByteArray_WriteBack_EqualsOriginal()
     {
-        var originalPacket = CreateRandomConnectPacket();
+        var originalPacket = CreateRandomQueryExtraPacket();
         var originalBytes = originalPacket.ToByteArray();
 
-        var parsed = Assert.IsType<ConnectPacket>(Packet.Parse(originalBytes));
+        var parsed = Assert.IsType<QueryExtraPacket>(Packet.Parse(originalBytes));
 
         var reserialized = parsed.ToByteArray();
 
@@ -53,7 +42,7 @@ public class ConnectPacket_Tests
     [Fact]
     public void Length_EncodedLength_MatchesPacketLength()
     {
-        var packet = CreateRandomConnectPacket();
+        var packet = CreateRandomQueryExtraPacket();
 
         var buffer = new byte[packet.Length()];
         packet.Write(buffer);

@@ -13,6 +13,9 @@ public class QueryPacket_Tests
             Flags = BitConverter.ToUInt64(RandomNumberGenerator.GetBytes(8), 0),
             ProtectionLevel = (EProtectionLevel)(Random.Shared.Next(0, byte.MaxValue) + 1),
             OrderBy = (EOrderBy)Random.Shared.Next(1, 6),
+            FilterTag = (byte)Random.Shared.Next(0, 256),
+            Filter = RandomNumberGenerator.GetBytes(Random.Shared.Next(5, 200)),
+            FilterOperation = (EFilterOperation)Random.Shared.Next(1, 7),
             Skip = (ushort)Random.Shared.Next(0, ushort.MaxValue),
             Count = (byte)Random.Shared.Next(0, byte.MaxValue)
         };
@@ -31,6 +34,9 @@ public class QueryPacket_Tests
         Assert.Equal(packet.Flags, parsed.Flags);
         Assert.Equal(packet.ProtectionLevel, parsed.ProtectionLevel);
         Assert.Equal(packet.OrderBy, parsed.OrderBy);
+        Assert.Equal(packet.FilterTag, parsed.FilterTag);
+        Assert.Equal(packet.Filter, parsed.Filter);
+        Assert.Equal(packet.FilterOperation, parsed.FilterOperation);
         Assert.Equal(packet.Skip, parsed.Skip);
         Assert.Equal(packet.Count, parsed.Count);
     }

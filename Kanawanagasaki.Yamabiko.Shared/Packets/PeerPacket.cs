@@ -1,6 +1,7 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Shared.Packets;
 
 using Kanawanagasaki.Yamabiko.Shared.Enums;
+using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using System;
 using System.Text;
 
@@ -13,51 +14,49 @@ public class PeerPacket : Packet
 
     public required Guid ProjectId { get; init; }
 
-    private byte[] _nameBytes = Array.Empty<byte>();
-    private string? _name;
-    public string? Name
+    private string _name = string.Empty;
+    public string Name
     {
         get => _name;
         init
         {
+            if (255 < BinaryHelper.BytesCount(value))
+                throw new FormatException("Name is too long");
             _name = value;
-            if (value is not null)
-                _nameBytes = Encoding.UTF8.GetBytes(value);
         }
     }
 
-    public byte[] Extra { get; init; } = Array.Empty<byte>();
-
     public ulong Flags { get; init; }
 
-    public required ushort Index { get; init; }
-
-    public PeerPacket() { }
-
-    private PeerPacket(byte[] nameBytes, byte[] extraBytes)
+    public byte[] _extraTags = Array.Empty<byte>();
+    public byte[] ExtraTags
     {
-        _nameBytes = nameBytes;
-        if (0 < nameBytes.Length)
-            _name = Encoding.UTF8.GetString(nameBytes);
-
-        Extra = extraBytes;
+        get => _extraTags;
+        init
+        {
+            if (255 < value.Length)
+                throw new FormatException("Extra Tags is too long");
+            _extraTags = value;
+        }
     }
+
+    public required int Index { get; init; }
 
     protected override int InternalLength()
     {
         int len = 0;
 
-        len += 16; // peer id
+        len += BinaryHelper.BytesCount(PeerId);
 
-        len += 16; // project id
+        len += BinaryHelper.BytesCount(ProjectId);
 
-        len += 1 + _nameBytes.Length;
+        len += BinaryHelper.BytesCount(Name);
 
-        len += 1 + Extra.Length;
+        len += BinaryHelper.BytesCount(Flags);
 
-        len += 8; // flags
+        len += BinaryHelper.BytesCount(ExtraTags);
 
-        len += 2; // index
+        len += BinaryHelper.BytesCount(Index);
 
         return len;
     }
@@ -66,86 +65,50 @@ public class PeerPacket : Packet
     {
         int offset = 0;
 
-        PeerId.TryWriteBytes(buffer.Slice(offset, 16), true, out _);
-        offset += 16;
+        BinaryHelper.Write(PeerId, buffer, ref offset);
 
-        ProjectId.TryWriteBytes(buffer.Slice(offset, 16), true, out _);
-        offset += 16;
+        BinaryHelper.Write(ProjectId, buffer, ref offset);
 
-        buffer[offset++] = (byte)_nameBytes.Length;
-        _nameBytes.CopyTo(buffer.Slice(offset, (byte)_nameBytes.Length));
-        offset += (byte)_nameBytes.Length;
+        BinaryHelper.Write(Name, buffer, ref offset);
 
-        buffer[offset++] = (byte)Extra.Length;
-        Extra.CopyTo(buffer.Slice(offset, (byte)Extra.Length));
-        offset += (byte)Extra.Length;
+        BinaryHelper.Write(Flags, buffer, ref offset);
 
-        buffer[offset++] = (byte)((Flags >> 56) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 48) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 40) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 32) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 24) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 16) & 0xFF);
-        buffer[offset++] = (byte)((Flags >> 8) & 0xFF);
-        buffer[offset++] = (byte)(Flags & 0xFF);
+        BinaryHelper.Write(ExtraTags, buffer, ref offset);
 
-        buffer[offset++] = (byte)((Index >> 8) & 0xFF);
-        buffer[offset++] = (byte)(Index & 0xFF);
+        BinaryHelper.Write(Index, buffer, ref offset);
     }
 
     public static PeerPacket InternalParse(ReadOnlySpan<byte> buffer)
     {
-        int offset = 0;
-
-        if (buffer.Length < offset + 16)
-            throw new FormatException("Buffer too small: cannot read peer id");
-
-        var peerId = new Guid(buffer.Slice(offset, 16), true);
-        offset += 16;
-
-        if (buffer.Length < offset + 16)
-            throw new FormatException("Buffer too small: cannot read project ID");
-
-        var projectId = new Guid(buffer.Slice(offset, 16), true);
-        offset += 16;
-
-        if (buffer.Length < offset + 1)
-            throw new FormatException("Buffer too small: cannot read name length");
-        var nameLength = buffer[offset++];
-        if (buffer.Length < offset + nameLength)
-            throw new FormatException("Buffer too small: cannot read name");
-        var nameSpan = buffer.Slice(offset, nameLength);
-        offset += nameLength;
-
-        if (buffer.Length < offset + 1)
-            throw new FormatException("Buffer too small: cannot read extra length");
-        var extraLength = buffer[offset++];
-        if (buffer.Length < offset + extraLength)
-            throw new FormatException("Buffer too small: cannot read extra");
-        var extraSpan = buffer.Slice(offset, extraLength);
-        offset += extraLength;
-
-        if (buffer.Length < offset + 8)
-            throw new FormatException("Buffer too small: cannot read flags");
-        var flags = ((ulong)buffer[offset++] << 56)
-                  | ((ulong)buffer[offset++] << 48)
-                  | ((ulong)buffer[offset++] << 40)
-                  | ((ulong)buffer[offset++] << 32)
-                  | ((ulong)buffer[offset++] << 24)
-                  | ((ulong)buffer[offset++] << 16)
-                  | ((ulong)buffer[offset++] << 8)
-                  | buffer[offset++];
-
-        if (buffer.Length < offset + 2)
-            throw new FormatException("Buffer too small: cannot read index");
-        var index = (ushort)((buffer[offset++] << 8) | buffer[offset++]);
-
-        return new PeerPacket(nameSpan.ToArray(), extraSpan.ToArray())
+        try
         {
-            PeerId = peerId,
-            ProjectId = projectId,
-            Flags = flags,
-            Index = index
-        };
+            int offset = 0;
+
+            var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
+
+            var projectId = BinaryHelper.ReadGuid(buffer, ref offset);
+
+            var name = BinaryHelper.ReadString(buffer, ref offset);
+
+            var flags = BinaryHelper.ReadUInt64(buffer, ref offset);
+
+            var extraTags = BinaryHelper.ReadByteArray(buffer, ref offset);
+
+            var index = BinaryHelper.ReadInt32(buffer, ref offset);
+
+            return new PeerPacket
+            {
+                PeerId = peerId,
+                ProjectId = projectId,
+                Name = name ?? string.Empty,
+                Flags = flags,
+                ExtraTags = extraTags ?? Array.Empty<byte>(),
+                Index = index
+            };
+        }
+        catch
+        {
+            throw new FormatException("Failed to parse " + nameof(PeerPacket));
+        }
     }
 }

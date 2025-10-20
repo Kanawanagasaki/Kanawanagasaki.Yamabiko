@@ -4,22 +4,22 @@ using Kanawanagasaki.Yamabiko.Shared.Enums;
 using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using System;
 
-public class ConnectDenyPacket : Packet
+public class QueryExtraPacket : Packet
 {
-    public const EPacketType TYPE = EPacketType.CONNECT_DENY;
+    public const EPacketType TYPE = EPacketType.QUERY_EXTRA;
     public override EPacketType Type => TYPE;
 
     public required Guid PeerId { get; init; }
 
-    private string? _reason;
-    public string? Reason
+    public byte[] _extraTags = Array.Empty<byte>();
+    public byte[] ExtraTags
     {
-        get => _reason;
+        get => _extraTags;
         init
         {
-            if (value is not null && 255 < BinaryHelper.BytesCount(value))
-                throw new FormatException("Reason is too long");
-            _reason = value;
+            if (255 < value.Length)
+                throw new FormatException("Extra Tags is too long");
+            _extraTags = value;
         }
     }
 
@@ -29,7 +29,7 @@ public class ConnectDenyPacket : Packet
 
         len += BinaryHelper.BytesCount(PeerId);
 
-        len += BinaryHelper.BytesCount(Reason);
+        len += BinaryHelper.BytesCount(ExtraTags);
 
         return len;
     }
@@ -40,10 +40,10 @@ public class ConnectDenyPacket : Packet
 
         BinaryHelper.Write(PeerId, buffer, ref offset);
 
-        BinaryHelper.Write(Reason, buffer, ref offset);
+        BinaryHelper.Write(ExtraTags, buffer, ref offset);
     }
 
-    public static ConnectDenyPacket InternalParse(ReadOnlySpan<byte> buffer)
+    public static QueryExtraPacket InternalParse(ReadOnlySpan<byte> buffer)
     {
         try
         {
@@ -51,17 +51,17 @@ public class ConnectDenyPacket : Packet
 
             var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
 
-            var reason = BinaryHelper.ReadString(buffer, ref offset);
+            var extraTags = BinaryHelper.ReadByteArray(buffer, ref offset);
 
-            return new ConnectDenyPacket
+            return new QueryExtraPacket
             {
                 PeerId = peerId,
-                Reason = reason
+                ExtraTags = extraTags ?? Array.Empty<byte>(),
             };
         }
         catch
         {
-            throw new FormatException("Failed to parse " + nameof(ConnectDenyPacket));
+            throw new FormatException("Failed to parse " + nameof(QueryExtraPacket));
         }
     }
 }

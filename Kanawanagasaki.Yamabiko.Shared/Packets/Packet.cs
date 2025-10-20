@@ -57,18 +57,26 @@ public abstract class Packet
                 return UnsubscribePacket.InternalParse(buffer.Slice(4, length));
             case EPacketType.ADVERTISE:
                 return AdvertisePacket.InternalParse(buffer.Slice(4, length));
+            case EPacketType.ADVERTISE_EXTRA:
+                return AdvertiseExtraPacket.InternalParse(buffer.Slice(4, length));
             case EPacketType.STOP_ADVERTISING:
                 return StopAdvertisingPacket.InternalParse(buffer.Slice(4, length));
             case EPacketType.QUERY:
                 return QueryPacket.InternalParse(buffer.Slice(4, length));
+            case EPacketType.QUERY_EXTRA:
+                return QueryExtraPacket.InternalParse(buffer.Slice(4, length));
             case EPacketType.PEER:
                 return PeerPacket.InternalParse(buffer.Slice(4, length));
+            case EPacketType.PEER_EXTRA:
+                return PeerExtraPacket.InternalParse(buffer.Slice(4, length));
             case EPacketType.CONNECT:
                 return ConnectPacket.InternalParse(buffer.Slice(4, length));
             case EPacketType.CONNECT_DENY:
                 return ConnectDenyPacket.InternalParse(buffer.Slice(4, length));
             case EPacketType.PEER_CONNECT:
                 return PeerConnectPacket.InternalParse(buffer.Slice(4, length));
+            case EPacketType.DIRECT_CONNECT:
+                return DirectConnectPacket.InternalParse(buffer.Slice(4, length));
             default:
                 throw new FormatException("Unknown packet type");
         }
