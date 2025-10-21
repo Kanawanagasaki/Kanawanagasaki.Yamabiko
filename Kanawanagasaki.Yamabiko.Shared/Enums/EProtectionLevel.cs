@@ -3,8 +3,8 @@
 [Flags]
 public enum EProtectionLevel : byte
 {
-    PASSWORD_PROTECTED = 0b0000_0001,
-    PUBLIC = 0b0000_0010,
+    ANY = 0b0000_0000,
 
-    ALL = 0b1111_1111
+    PASSWORD_PROTECTED = 0b0000_0001,
+    PUBLIC = 0b0000_0010
 }

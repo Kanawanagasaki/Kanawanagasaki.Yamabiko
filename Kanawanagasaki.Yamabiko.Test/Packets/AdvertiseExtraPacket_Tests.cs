@@ -8,6 +8,7 @@ public class AdvertiseExtraPacket_Tests
     private static AdvertiseExtraPacket CreateRandomAdvertiseExtraPacket()
         => new AdvertiseExtraPacket
         {
+            ProjectId = Guid.NewGuid(),
             Tag = (byte)Random.Shared.Next(0, 256),
             Data = RandomNumberGenerator.GetBytes(255)
         };
@@ -22,6 +23,7 @@ public class AdvertiseExtraPacket_Tests
 
         var parsed = Assert.IsType<AdvertiseExtraPacket>(Packet.Parse(buffer));
 
+        Assert.Equal(packet.ProjectId, parsed.ProjectId);
         Assert.Equal(packet.Tag, parsed.Tag);
         Assert.Equal(packet.Data, parsed.Data);
     }

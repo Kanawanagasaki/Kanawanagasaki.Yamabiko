@@ -12,7 +12,7 @@ public class QueryPacket : Packet
 
     public ulong Flags { get; init; }
 
-    public EProtectionLevel ProtectionLevel { get; init; } = EProtectionLevel.ALL;
+    public EProtectionLevel ProtectionLevel { get; init; } = EProtectionLevel.ANY;
 
     public EOrderBy OrderBy { get; init; } = EOrderBy.NAME_ASC;
 
