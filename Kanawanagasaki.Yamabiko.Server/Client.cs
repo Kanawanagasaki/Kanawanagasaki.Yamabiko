@@ -27,7 +27,8 @@ public class Client : IDisposable
     private byte[]? _serverAesIV;
     private Aes? _serverHeaderAes;
 
-    private ulong _recordCounter = 1;
+    private ulong _clientLastRecordNumber = 0;
+    private ulong _serverRecordCounter = 1;
 
     private HashSet<Guid> _subscribedProjects = [];
 
@@ -105,7 +106,7 @@ public class Client : IDisposable
             {
                 while (offset < buffer.Length)
                 {
-                    var record = PlainTextRecord.Parse(buffer.Span, ref offset);
+                    var record = PlainTextRecord.Parse(buffer.Span, 0, 0, ref offset);
                     if (record.Type is ERecordType.ALERT)
                     {
                         var alert = Alert.Parse(record.Buffer);
@@ -118,7 +119,9 @@ public class Client : IDisposable
             {
                 while (offset < buffer.Length)
                 {
-                    var record = CipherTextRecord.DecryptAndParse(buffer.Span, _clientAes, _clientAesIV, _clientHeaderAes, ref offset);
+                    var record = CipherTextRecord.DecryptAndParse(buffer.Span, _clientAes, _clientAesIV, _clientHeaderAes, 0, _clientLastRecordNumber, ref offset);
+                    if (_clientLastRecordNumber < record.RecordNumber)
+                        _clientLastRecordNumber = record.RecordNumber;
                     if (record.Type is ERecordType.ALERT)
                     {
                         var alert = Alert.Parse(record.Buffer);
@@ -167,7 +170,7 @@ public class Client : IDisposable
                 await ProcessUnsubscribeAsync(unsubscribe, record, ct);
                 break;
             case QueryPacket query:
-                await ProcessQueryAsync(query, record, ct);
+                await ProcessQueryAsync(query, ct);
                 break;
             case QueryExtraPacket queryExtra:
                 await ProcessQueryExtraAsync(queryExtra, record, ct);
@@ -182,7 +185,7 @@ public class Client : IDisposable
                 await ProcessDirectConnectAsync(directConnect, ct);
                 break;
             default:
-                await SendAckAsync(record.EpochLowBits, record.RecordNumber, ct);
+                await SendAckAsync(record, ct);
                 break;
         }
     }
@@ -193,26 +196,39 @@ public class Client : IDisposable
     private async Task ProcessAdvertiseAsync(AdvertisePacket ad, CipherTextRecord record, CancellationToken ct)
     {
         var peer = ProjectsService.ProcessAdvertisement(this, ad);
-        await SendAckAsync(record.EpochLowBits, record.RecordNumber, ct);
+        await SendAckAsync(record, ct);
 
         var project = ProjectsService.GetProject(ad.ProjectId);
         if (project is not null)
         {
             foreach (var subscriber in project.GetSubscribers())
-                await subscriber.SendPacketsAsync([peer.ToPacket(-1)], ct);
+                await subscriber.SendPacketsAsync([peer.ToPacket(Guid.Empty, -1, project.Count)], ct);
         }
     }
 
     private async Task ProcessAdvertiseExtraAsync(AdvertiseExtraPacket adExtra, CipherTextRecord record, CancellationToken ct)
     {
         ProjectsService.ProcessAdvertisementExtra(PeerId, adExtra);
-        await SendAckAsync(record.EpochLowBits, record.RecordNumber, ct);
+        await SendAckAsync(record, ct);
+
+        var project = ProjectsService.GetProject(adExtra.ProjectId);
+        if (project is not null)
+        {
+            var peerExtra = new PeerExtraPacket
+            {
+                PeerId = PeerId,
+                Tag = adExtra.Tag,
+                Data = adExtra.Data,
+            };
+            foreach (var subscriber in project.GetSubscribers())
+                await subscriber.SendPacketsAsync([peerExtra], ct);
+        }
     }
 
     private async Task ProcessStopAdvertisingAsync(StopAdvertisingPacket stopAd, CipherTextRecord record, CancellationToken ct)
     {
         ProjectsService.RemovePeer(PeerId);
-        await SendAckAsync(record.EpochLowBits, record.RecordNumber, ct);
+        await SendAckAsync(record, ct);
     }
 
     private async Task ProcessSubscribeAsync(SubscribePacket subscribe, CipherTextRecord record, CancellationToken ct)
@@ -223,51 +239,73 @@ public class Client : IDisposable
             ProjectsService.ProcessSubscribe(this, subscribe);
         }
 
-        await SendAckAsync(record.EpochLowBits, record.RecordNumber, ct);
+        await SendAckAsync(record, ct);
     }
 
     private async Task ProcessUnsubscribeAsync(UnsubscribePacket unsubscribe, CipherTextRecord record, CancellationToken ct)
     {
         _subscribedProjects.Remove(unsubscribe.ProjectId);
         ProjectsService.ProcessUnsubscribe(PeerId, unsubscribe);
-        await SendAckAsync(record.EpochLowBits, record.RecordNumber, ct);
+        await SendAckAsync(record, ct);
     }
 
-    private async Task ProcessQueryAsync(QueryPacket query, CipherTextRecord record, CancellationToken ct)
+    private async Task ProcessQueryAsync(QueryPacket query, CancellationToken ct)
     {
         var project = ProjectsService.GetProject(query.ProjectId);
         if (project is null)
         {
-            await SendAckAsync(record.EpochLowBits, record.RecordNumber, ct);
+            var emptyRes = new EmptyQueryResultPacket
+            {
+                RequestId = query.RequestId,
+                Total = 0
+            };
+            await SendPacketsAsync([emptyRes], ct);
             return;
         }
 
-        var packets = project.Query(query)
-                             .Select((x, i) => x.ToPacket(i))
-                             .ToArray();
+        var (total, res) = project.Query(query);
+        var packets = res.Select((x, i) => x.ToPacket(query.RequestId, i, total)).ToArray();
         if (packets.Length == 0)
-            await SendAckAsync(record.EpochLowBits, record.RecordNumber, ct);
+        {
+            var emptyRes = new EmptyQueryResultPacket
+            {
+                RequestId = query.RequestId,
+                Total = 0
+            };
+            await SendPacketsAsync([emptyRes], ct);
+        }
         else
+        {
             await SendPacketsAsync(packets, ct);
+        }
     }
 
     private async Task ProcessQueryExtraAsync(QueryExtraPacket queryExtra, CipherTextRecord record, CancellationToken ct)
     {
-        if (queryExtra.ExtraTags.Length == 0)
+        if (queryExtra.TagsIds.Length == 0)
         {
-            await SendAckAsync(record.EpochLowBits, record.RecordNumber, ct);
+            var emptyRes = new EmptyQueryExtraResultPacket
+            {
+                RequestId = queryExtra.RequestId,
+                TagsIds = queryExtra.TagsIds
+            };
+            await SendPacketsAsync([emptyRes], ct);
             return;
         }
 
         var peer = ProjectsService.GetPeer(queryExtra.PeerId);
         if (peer is null)
         {
-            await SendAckAsync(record.EpochLowBits, record.RecordNumber, ct);
+            var emptyRes = new EmptyQueryExtraResultPacket
+            {
+                RequestId = queryExtra.RequestId,
+                TagsIds = queryExtra.TagsIds
+            };
             return;
         }
 
         var extras = new List<PeerExtraPacket>();
-        foreach (var tag in queryExtra.ExtraTags)
+        foreach (var tag in queryExtra.TagsIds)
         {
             extras.Add(new PeerExtraPacket
             {
@@ -323,6 +361,7 @@ public class Client : IDisposable
 
         var connectDeny2 = new ConnectDenyPacket
         {
+            ConnectionId = connectDeny.ConnectionId,
             PeerId = PeerId,
             Reason = connectDeny.Reason
         };
@@ -337,6 +376,7 @@ public class Client : IDisposable
 
         var peerConnect = new PeerConnectPacket
         {
+            ConnectionId = directConnect.ConnectionId,
             PeerId = PeerId,
             PublicKey = directConnect.PublicKey,
             Ip = EndPoint.Address,
@@ -357,8 +397,8 @@ public class Client : IDisposable
             var record = new CipherTextRecord(packets[0].ToByteArray())
             {
                 Type = ERecordType.APPLICATION_DATA,
-                EpochLowBits = 3,
-                RecordNumber = (ushort)(_recordCounter++)
+                Epoch = 3,
+                RecordNumber = _serverRecordCounter++
             };
             var buffer = new byte[record.Length()];
             record.EncryptAndWrite(buffer, _serverAes, _serverAesIV, _serverHeaderAes);
@@ -373,8 +413,8 @@ public class Client : IDisposable
                 var record = new CipherTextRecord(packet.ToByteArray())
                 {
                     Type = ERecordType.APPLICATION_DATA,
-                    EpochLowBits = 3,
-                    RecordNumber = (ushort)(_recordCounter++)
+                    Epoch = 3,
+                    RecordNumber = _serverRecordCounter++
                 };
                 var buffer = new byte[record.Length()];
                 record.EncryptAndWrite(buffer, _serverAes, _serverAesIV, _serverHeaderAes);
@@ -393,20 +433,20 @@ public class Client : IDisposable
         }
     }
 
-    public async Task SendAckAsync(ulong epoch, ulong recordNumber, CancellationToken ct)
+    public async Task SendAckAsync(CipherTextRecord recordToAck, CancellationToken ct)
     {
         if (_serverAes is null || _serverAesIV is null || _serverHeaderAes is null)
             return;
 
-        var ack = new Ack(epoch, recordNumber);
+        var ack = new Ack(recordToAck.Epoch, recordToAck.RecordNumber);
         var ackBuffer = new byte[ack.Length()];
         ack.Write(ackBuffer);
 
         var record = new CipherTextRecord(ackBuffer)
         {
             Type = ERecordType.ALERT,
-            EpochLowBits = 3,
-            RecordNumber = (ushort)(_recordCounter++)
+            Epoch = 3,
+            RecordNumber = _serverRecordCounter++
         };
         var buffer = new byte[record.Length()];
         record.EncryptAndWrite(buffer, _serverAes, _serverAesIV, _serverHeaderAes);
@@ -426,8 +466,8 @@ public class Client : IDisposable
             var record = new CipherTextRecord(alertBuffer)
             {
                 Type = ERecordType.ALERT,
-                EpochLowBits = 3,
-                RecordNumber = (ushort)(_recordCounter++)
+                Epoch = 3,
+                RecordNumber = _serverRecordCounter++
             };
             buffer = new byte[record.Length()];
             record.EncryptAndWrite(buffer, _serverAes, _serverAesIV, _serverHeaderAes);
@@ -445,7 +485,7 @@ public class Client : IDisposable
             var record = new PlainTextRecord(alertBuffer)
             {
                 Type = ERecordType.ALERT,
-                KeyEpoch = 0,
+                Epoch = 0,
                 RecordNumber = 0
             };
             buffer = new byte[record.Length()];

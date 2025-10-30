@@ -9,6 +9,7 @@ public class QueryPacket_Tests
     private static QueryPacket CreateRandomQueryPacket()
         => new QueryPacket
         {
+            RequestId = Guid.NewGuid(),
             ProjectId = Guid.NewGuid(),
             Flags = BitConverter.ToUInt64(RandomNumberGenerator.GetBytes(8), 0),
             ProtectionLevel = (EProtectionLevel)(Random.Shared.Next(0, byte.MaxValue) + 1),
@@ -30,6 +31,7 @@ public class QueryPacket_Tests
 
         var parsed = Assert.IsType<QueryPacket>(Packet.Parse(buffer));
 
+        Assert.Equal(packet.RequestId, parsed.RequestId);
         Assert.Equal(packet.ProjectId, parsed.ProjectId);
         Assert.Equal(packet.Flags, parsed.Flags);
         Assert.Equal(packet.ProtectionLevel, parsed.ProtectionLevel);

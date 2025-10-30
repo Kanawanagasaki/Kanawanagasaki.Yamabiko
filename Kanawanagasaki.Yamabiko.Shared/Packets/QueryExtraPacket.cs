@@ -9,17 +9,19 @@ public class QueryExtraPacket : Packet
     public const EPacketType TYPE = EPacketType.QUERY_EXTRA;
     public override EPacketType Type => TYPE;
 
+    public required Guid RequestId { get; init; }
+
     public required Guid PeerId { get; init; }
 
-    public byte[] _extraTags = Array.Empty<byte>();
-    public byte[] ExtraTags
+    public byte[] _tagsIds = Array.Empty<byte>();
+    public byte[] TagsIds
     {
-        get => _extraTags;
+        get => _tagsIds;
         init
         {
             if (255 < value.Length)
-                throw new FormatException("Extra Tags is too long");
-            _extraTags = value;
+                throw new FormatException("Tags Ids is too long");
+            _tagsIds = value;
         }
     }
 
@@ -27,9 +29,11 @@ public class QueryExtraPacket : Packet
     {
         int len = 0;
 
+        len += BinaryHelper.BytesCount(RequestId);
+
         len += BinaryHelper.BytesCount(PeerId);
 
-        len += BinaryHelper.BytesCount(ExtraTags);
+        len += BinaryHelper.BytesCount(TagsIds);
 
         return len;
     }
@@ -38,9 +42,11 @@ public class QueryExtraPacket : Packet
     {
         int offset = 0;
 
+        BinaryHelper.Write(RequestId, buffer, ref offset);
+
         BinaryHelper.Write(PeerId, buffer, ref offset);
 
-        BinaryHelper.Write(ExtraTags, buffer, ref offset);
+        BinaryHelper.Write(TagsIds, buffer, ref offset);
     }
 
     public static QueryExtraPacket InternalParse(ReadOnlySpan<byte> buffer)
@@ -49,14 +55,17 @@ public class QueryExtraPacket : Packet
         {
             int offset = 0;
 
+            var requestId = BinaryHelper.ReadGuid(buffer, ref offset);
+
             var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
 
-            var extraTags = BinaryHelper.ReadByteArray(buffer, ref offset);
+            var tagsIds = BinaryHelper.ReadByteArray(buffer, ref offset);
 
             return new QueryExtraPacket
             {
+                RequestId = requestId,
                 PeerId = peerId,
-                ExtraTags = extraTags ?? Array.Empty<byte>(),
+                TagsIds = tagsIds ?? Array.Empty<byte>(),
             };
         }
         catch

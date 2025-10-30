@@ -25,7 +25,7 @@ public class Alert
         buffer[1] = (byte)Type;
     }
 
-    public static Alert Parse(Span<byte> buffer)
+    public static Alert Parse(ReadOnlySpan<byte> buffer)
     {
         if (buffer.Length < 2)
             throw new FormatException("Buffer too small");

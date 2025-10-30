@@ -40,7 +40,13 @@ public class PeerPacket : Packet
         }
     }
 
+    public required EProtectionLevel ProtectionLevel { get; init; }
+
+    public required Guid RequestId { get; init; }
+
     public required int Index { get; init; }
+
+    public required int Total { get; init; }
 
     protected override int InternalLength()
     {
@@ -56,7 +62,13 @@ public class PeerPacket : Packet
 
         len += BinaryHelper.BytesCount(ExtraTags);
 
+        len += 1; // Protection Level
+
+        len += BinaryHelper.BytesCount(RequestId);
+
         len += BinaryHelper.BytesCount(Index);
+
+        len += BinaryHelper.BytesCount(Total);
 
         return len;
     }
@@ -75,7 +87,13 @@ public class PeerPacket : Packet
 
         BinaryHelper.Write(ExtraTags, buffer, ref offset);
 
+        buffer[offset++] = (byte)ProtectionLevel;
+
+        BinaryHelper.Write(RequestId, buffer, ref offset);
+
         BinaryHelper.Write(Index, buffer, ref offset);
+
+        BinaryHelper.Write(Total, buffer, ref offset);
     }
 
     public static PeerPacket InternalParse(ReadOnlySpan<byte> buffer)
@@ -94,7 +112,13 @@ public class PeerPacket : Packet
 
             var extraTags = BinaryHelper.ReadByteArray(buffer, ref offset);
 
+            var protectionLevel = (EProtectionLevel)buffer[offset++];
+
+            var requestId = BinaryHelper.ReadGuid(buffer, ref offset);
+
             var index = BinaryHelper.ReadInt32(buffer, ref offset);
+
+            var total = BinaryHelper.ReadInt32(buffer, ref offset);
 
             return new PeerPacket
             {
@@ -103,7 +127,10 @@ public class PeerPacket : Packet
                 Name = name ?? string.Empty,
                 Flags = flags,
                 ExtraTags = extraTags ?? Array.Empty<byte>(),
-                Index = index
+                ProtectionLevel = protectionLevel,
+                RequestId = requestId,
+                Index = index,
+                Total = total
             };
         }
         catch

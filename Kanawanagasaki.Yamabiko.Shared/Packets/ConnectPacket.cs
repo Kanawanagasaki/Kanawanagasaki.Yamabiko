@@ -11,6 +11,8 @@ public class ConnectPacket : Packet
 
     public required Guid PeerId { get; init; }
 
+    public required Guid ConnectionId { get; init; }
+
     private string? _password;
     public string? Password
     {
@@ -35,15 +37,21 @@ public class ConnectPacket : Packet
         }
     }
 
+    public byte[]? Extra { get; init; }
+
     protected override int InternalLength()
     {
         int len = 0;
 
         len += BinaryHelper.BytesCount(PeerId);
 
+        len += BinaryHelper.BytesCount(ConnectionId);
+
         len += BinaryHelper.BytesCount(Password);
 
         len += BinaryHelper.BytesCount(PublicKey);
+
+        len += BinaryHelper.BytesCount(Extra);
 
         return len;
     }
@@ -54,9 +62,13 @@ public class ConnectPacket : Packet
 
         BinaryHelper.Write(PeerId, buffer, ref offset);
 
+        BinaryHelper.Write(ConnectionId, buffer, ref offset);
+
         BinaryHelper.Write(Password, buffer, ref offset);
 
         BinaryHelper.Write(PublicKey, buffer, ref offset);
+
+        BinaryHelper.Write(Extra, buffer, ref offset);
     }
 
     public static ConnectPacket InternalParse(ReadOnlySpan<byte> buffer)
@@ -67,15 +79,21 @@ public class ConnectPacket : Packet
 
             var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
 
+            var connectionId = BinaryHelper.ReadGuid(buffer, ref offset);
+
             var password = BinaryHelper.ReadString(buffer, ref offset);
 
             var publicKey = BinaryHelper.ReadByteArray(buffer, ref offset);
 
+            var extra = BinaryHelper.ReadByteArray(buffer, ref offset);
+
             return new ConnectPacket
             {
                 PeerId = peerId,
+                ConnectionId = connectionId,
                 Password = password,
-                PublicKey = publicKey ?? Array.Empty<byte>()
+                PublicKey = publicKey ?? Array.Empty<byte>(),
+                Extra = extra
             };
         }
         catch

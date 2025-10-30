@@ -1,5 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Test.Helpers;
 
+using Kanawanagasaki.Yamabiko.Dtls.Helpers;
 using Kanawanagasaki.Yamabiko.Shared;
 using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using System.Collections;
@@ -200,7 +201,7 @@ public class BinaryHelper_Tests(ITestOutputHelper _output)
             BinaryHelper.Write(value, byteArrays[index], ref o);
         }
 
-        Array.Sort(byteArrays, CompareByteArrayLex);
+        Array.Sort(byteArrays, KeyHashHelper.CompareByteArrayLex);
 
         for (int i = 0; i < byteArrays.Length; i++)
         {
@@ -274,7 +275,7 @@ public class BinaryHelper_Tests(ITestOutputHelper _output)
             BinaryHelper.Write(value, byteArrays[index], ref o);
         }
 
-        Array.Sort(byteArrays, CompareByteArrayLex);
+        Array.Sort(byteArrays, KeyHashHelper.CompareByteArrayLex);
 
         for (int i = 0; i < byteArrays.Length; i++)
         {
@@ -282,15 +283,6 @@ public class BinaryHelper_Tests(ITestOutputHelper _output)
             var val = BinaryHelper.ReadDouble(byteArrays[i], ref o);
             Assert.Equal(values[i], val);
         }
-    }
-
-    private static int CompareByteArrayLex(byte[] a, byte[] b)
-    {
-        var n = Math.Min(a.Length, b.Length);
-        for (int i = 0; i < n; i++)
-            if (a[i] != b[i])
-                return a[i].CompareTo(b[i]);
-        return a.Length.CompareTo(b.Length);
     }
 
     [Theory]

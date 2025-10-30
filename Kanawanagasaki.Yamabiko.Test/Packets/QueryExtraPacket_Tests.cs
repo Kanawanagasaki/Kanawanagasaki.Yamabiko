@@ -8,8 +8,9 @@ public class QueryExtraPacket_Tests
     private static QueryExtraPacket CreateRandomQueryExtraPacket()
         => new QueryExtraPacket
         {
+            RequestId = Guid.NewGuid(),
             PeerId = Guid.NewGuid(),
-            ExtraTags = RandomNumberGenerator.GetBytes(255).Distinct().ToArray(),
+            TagsIds = RandomNumberGenerator.GetBytes(255).Distinct().ToArray(),
         };
 
     [Fact]
@@ -22,8 +23,9 @@ public class QueryExtraPacket_Tests
 
         var parsed = Assert.IsType<QueryExtraPacket>(Packet.Parse(buffer));
 
+        Assert.Equal(packet.RequestId, parsed.RequestId);
         Assert.Equal(packet.PeerId, parsed.PeerId);
-        Assert.Equal(packet.ExtraTags, parsed.ExtraTags);
+        Assert.Equal(packet.TagsIds, parsed.TagsIds);
     }
 
     [Fact]

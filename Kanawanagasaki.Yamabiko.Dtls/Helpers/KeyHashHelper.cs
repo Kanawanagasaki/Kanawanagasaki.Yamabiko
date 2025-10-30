@@ -4,13 +4,17 @@ using Kanawanagasaki.Yamabiko.Dtls.Handshake;
 using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Macs;
 using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Tls;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 
 public static class KeyHashHelper
 {
+    public const string DTLS_PREFIX = "dtls13";
+    public static byte[] CERT_VERIFY_PREFIX { get; } = [0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x54, 0x4C, 0x53, 0x20, 0x31, 0x2E, 0x33, 0x2C, 0x20, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x20, 0x43, 0x65, 0x72, 0x74, 0x69, 0x66, 0x69, 0x63, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x79, 0x00];
+    public static byte[] EARLY_SECRET { get; } = HKDF_Extract(null, Array.Empty<byte>());
+    public static byte[] EARLY_DERIVED { get; } = HKDF_ExpandLabel(EARLY_SECRET, "derived", null, 32, DTLS_PREFIX);
+
     public static byte[] GenerateX25519PublicKey(ReadOnlySpan<byte> privateKey)
     {
         var privParam = new X25519PrivateKeyParameters(privateKey);
@@ -50,10 +54,10 @@ public static class KeyHashHelper
         return buffer;
     }
 
-    public static byte[] HKDF_Extract(byte[] salt, byte[] ikm)
+    public static byte[] HKDF_Extract(byte[]? salt, byte[] ikm)
     {
         var h = new HMac(new Sha256Digest());
-        if (salt == null || salt.Length == 0)
+        if (salt is null || salt.Length == 0)
             salt = new byte[32];
         h.Init(new KeyParameter(salt));
         h.BlockUpdate(ikm, 0, ikm.Length);
@@ -88,10 +92,10 @@ public static class KeyHashHelper
         return okm;
     }
 
-    public static byte[] HKDF_ExpandLabel(byte[] secret, string label, byte[] context, int length, string prefix)
+    public static byte[] HKDF_ExpandLabel(byte[] secret, string label, byte[]? context, int length, string prefix)
     {
         var labelBytes = Encoding.ASCII.GetBytes(prefix + label);
-        if (context == null)
+        if (context is null)
             context = Array.Empty<byte>();
 
         var lengthBytes = new byte[2] { (byte)((length >> 8) & 0xff), (byte)(length & 0xff) };
@@ -115,5 +119,14 @@ public static class KeyHashHelper
     public static byte[] DeriveSecret(byte[] secret, string label, byte[] transcriptHash, string prefix)
     {
         return HKDF_ExpandLabel(secret, label, transcriptHash, 32, prefix);
+    }
+
+    public static int CompareByteArrayLex(byte[] a, byte[] b)
+    {
+        var n = Math.Min(a.Length, b.Length);
+        for (int i = 0; i < n; i++)
+            if (a[i] != b[i])
+                return a[i].CompareTo(b[i]);
+        return a.Length.CompareTo(b.Length);
     }
 }

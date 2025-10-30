@@ -1,5 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Test.Packets;
 
+using Kanawanagasaki.Yamabiko.Shared.Enums;
 using Kanawanagasaki.Yamabiko.Shared.Packets;
 using System.Security.Cryptography;
 
@@ -13,7 +14,10 @@ public class PeerPacket_Tests
             Name = RandomAsciiString(Random.Shared.Next(0, 200)),
             Flags = BitConverter.ToUInt64(RandomNumberGenerator.GetBytes(8), 0),
             ExtraTags = RandomNumberGenerator.GetBytes(255).Distinct().ToArray(),
-            Index = (ushort)Random.Shared.Next(0, ushort.MaxValue)
+            ProtectionLevel = Random.Shared.NextDouble() < 0.5 ? EProtectionLevel.PUBLIC : EProtectionLevel.PASSWORD_PROTECTED,
+            RequestId = Guid.NewGuid(),
+            Index = Random.Shared.Next(0, int.MaxValue),
+            Total = Random.Shared.Next(0, int.MaxValue),
         };
 
     private static string RandomAsciiString(int length)
@@ -39,7 +43,10 @@ public class PeerPacket_Tests
         Assert.Equal(packet.Name, parsed.Name);
         Assert.Equal(packet.Flags, parsed.Flags);
         Assert.Equal(packet.ExtraTags, parsed.ExtraTags);
+        Assert.Equal(packet.ProtectionLevel, parsed.ProtectionLevel);
+        Assert.Equal(packet.RequestId, parsed.RequestId);
         Assert.Equal(packet.Index, parsed.Index);
+        Assert.Equal(packet.Total, parsed.Total);
     }
 
     [Fact]

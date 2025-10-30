@@ -9,6 +9,8 @@ public class PeerExtraPacket : Packet
     public const EPacketType TYPE = EPacketType.PEER_EXTRA;
     public override EPacketType Type => TYPE;
 
+    public required Guid RequestId { get; init; }
+
     public required Guid PeerId { get; init; }
 
     public required byte Tag { get; init; }
@@ -29,6 +31,8 @@ public class PeerExtraPacket : Packet
     {
         int len = 0;
 
+        len += BinaryHelper.BytesCount(RequestId);
+
         len += BinaryHelper.BytesCount(PeerId);
 
         len += 1; // Tag
@@ -41,6 +45,8 @@ public class PeerExtraPacket : Packet
     protected override void InternalWrite(Span<byte> buffer)
     {
         int offset = 0;
+
+        BinaryHelper.Write(RequestId, buffer, ref offset);
 
         BinaryHelper.Write(PeerId, buffer, ref offset);
 
@@ -55,6 +61,8 @@ public class PeerExtraPacket : Packet
         {
             int offset = 0;
 
+            var requestId = BinaryHelper.ReadGuid(buffer, ref offset);
+
             var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
 
             var tag = buffer[offset++];
@@ -63,6 +71,7 @@ public class PeerExtraPacket : Packet
 
             return new PeerExtraPacket
             {
+                RequestId = requestId,
                 PeerId = peerId,
                 Tag = tag,
                 Data = data

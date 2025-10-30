@@ -6,8 +6,8 @@ public class PlainTextRecord
 {
     public required ERecordType Type { get; init; }
     public EVersions LegacyVersion { get; } = EVersions.DTLS1_2;
-    public required ushort KeyEpoch { get; init; }
-    public required long RecordNumber { get; init; }
+    public required ulong Epoch { get; init; }
+    public required ulong RecordNumber { get; init; }
 
     public byte[] Buffer { get; }
 
@@ -26,7 +26,7 @@ public class PlainTextRecord
 
         len += 2; // key epoch
 
-        len += 6; // sequence number
+        len += 6; // record number
 
         len += 2; // data length
 
@@ -45,8 +45,8 @@ public class PlainTextRecord
         buffer[1] = (byte)((ushort)LegacyVersion >> 8);
         buffer[2] = (byte)((ushort)LegacyVersion & 0xFF);
 
-        buffer[3] = (byte)(KeyEpoch >> 8);
-        buffer[4] = (byte)(KeyEpoch & 0xFF);
+        buffer[3] = (byte)((Epoch >> 8) & 0xFF);
+        buffer[4] = (byte)(Epoch & 0xFF);
 
         buffer[5] = (byte)((RecordNumber >> 40) & 0xFF);
         buffer[6] = (byte)((RecordNumber >> 32) & 0xFF);
@@ -61,7 +61,7 @@ public class PlainTextRecord
         Buffer.CopyTo(buffer.Slice(13, Buffer.Length));
     }
 
-    public static PlainTextRecord Parse(ReadOnlySpan<byte> buffer, ref int offset)
+    public static PlainTextRecord Parse(ReadOnlySpan<byte> buffer, ulong epochHighBits, ulong recordNumHighBits, ref int offset)
     {
         if (buffer.Length < offset + 13)
             throw new FormatException("Buffer too small");
@@ -75,14 +75,14 @@ public class PlainTextRecord
         if (legacyVersion is not EVersions.DTLS1_2)
             throw new FormatException("Incorrect legacy version");
 
-        var keyEpoch = (ushort)((buffer[offset++] << 8) | buffer[offset++]);
+        var epoch = (ushort)((buffer[offset++] << 8) | buffer[offset++]);
 
-        var sequenceNumber = ((long)buffer[offset++] << 40)
-                           | ((long)buffer[offset++] << 32)
-                           | ((long)buffer[offset++] << 24)
-                           | ((long)buffer[offset++] << 16)
-                           | ((long)buffer[offset++] << 8)
-                           | buffer[offset++];
+        var recordNumber = ((ulong)buffer[offset++] << 40)
+                         | ((ulong)buffer[offset++] << 32)
+                         | ((ulong)buffer[offset++] << 24)
+                         | ((ulong)buffer[offset++] << 16)
+                         | ((ulong)buffer[offset++] << 8)
+                         | buffer[offset++];
 
         var len = (ushort)((buffer[offset++] << 8) | buffer[offset++]);
 
@@ -95,8 +95,8 @@ public class PlainTextRecord
         return new PlainTextRecord(data)
         {
             Type = type,
-            KeyEpoch = keyEpoch,
-            RecordNumber = sequenceNumber
+            Epoch = (epochHighBits & ~0xFFFFuL) | epoch,
+            RecordNumber = (recordNumHighBits & 0xFF_FF_00_00_00_00_00_00uL) | recordNumber
         };
     }
 }

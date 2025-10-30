@@ -8,6 +8,7 @@ public class ConnectDenyPacket_Tests
     private static ConnectDenyPacket CreateRandomConnectDenyPacket()
         => new ConnectDenyPacket
         {
+            ConnectionId = Guid.NewGuid(),
             PeerId = Guid.NewGuid(),
             Reason = Random.Shared.NextDouble() < 0.5 ? null : RandomAsciiString(Random.Shared.Next(0, 200))
         };
@@ -30,6 +31,7 @@ public class ConnectDenyPacket_Tests
 
         var parsed = Assert.IsType<ConnectDenyPacket>(Packet.Parse(buffer));
 
+        Assert.Equal(packet.ConnectionId, parsed.ConnectionId);
         Assert.Equal(packet.PeerId, parsed.PeerId);
         Assert.Equal(packet.Reason, parsed.Reason);
     }

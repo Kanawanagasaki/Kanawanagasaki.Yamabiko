@@ -11,10 +11,12 @@ public enum EPacketType : ushort
     STOP_ADVERTISING = 7,
     QUERY = 8,
     QUERY_EXTRA = 9,
-    PEER = 10,
-    PEER_EXTRA = 11,
-    CONNECT = 12,
-    CONNECT_DENY = 13,
-    PEER_CONNECT = 14,
-    DIRECT_CONNECT = 15
+    EMPTY_QUERY_RESULT = 10,
+    EMPTY_QUERY_EXTRA_RESULT = 11,
+    PEER = 12,
+    PEER_EXTRA = 13,
+    CONNECT = 14,
+    CONNECT_DENY = 15,
+    PEER_CONNECT = 16,
+    DIRECT_CONNECT = 17
 }

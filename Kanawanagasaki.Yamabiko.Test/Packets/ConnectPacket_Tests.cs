@@ -10,8 +10,10 @@ public class ConnectPacket_Tests
         => new ConnectPacket
         {
             PeerId = Guid.NewGuid(),
+            ConnectionId = Guid.NewGuid(),
             PublicKey = RandomNumberGenerator.GetBytes(32),
-            Password = Random.Shared.NextDouble() < 0.5 ? null : RandomAsciiString(Random.Shared.Next(0, 200))
+            Password = Random.Shared.NextDouble() < 0.5 ? null : RandomAsciiString(Random.Shared.Next(0, 200)),
+            Extra = Random.Shared.NextDouble() < 0.5 ? null : RandomNumberGenerator.GetBytes(Random.Shared.Next(0, 1000))
         };
 
     private static string RandomAsciiString(int length)
@@ -33,8 +35,10 @@ public class ConnectPacket_Tests
         var parsed = Assert.IsType<ConnectPacket>(Packet.Parse(buffer));
 
         Assert.Equal(packet.PeerId, parsed.PeerId);
+        Assert.Equal(packet.ConnectionId, parsed.ConnectionId);
         Assert.Equal(packet.PublicKey, parsed.PublicKey);
         Assert.Equal(packet.Password, parsed.Password);
+        Assert.Equal(packet.Extra, parsed.Extra);
     }
 
     [Fact]

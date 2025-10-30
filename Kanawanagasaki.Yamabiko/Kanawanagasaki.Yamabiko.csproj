@@ -7,4 +7,13 @@
 		<WarningsAsErrors>Nullable</WarningsAsErrors>
 	</PropertyGroup>
 
+	<ItemGroup>
+	  <PackageReference Include="KcpSharp" Version="0.8.8" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\Kanawanagasaki.Yamabiko.Dtls\Kanawanagasaki.Yamabiko.Dtls.csproj" />
+	  <ProjectReference Include="..\Kanawanagasaki.Yamabiko.Shared\Kanawanagasaki.Yamabiko.Shared.csproj" />
+	</ItemGroup>
+
 </Project>

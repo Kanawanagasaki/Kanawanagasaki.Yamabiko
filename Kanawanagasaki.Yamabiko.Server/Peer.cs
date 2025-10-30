@@ -1,5 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Server;
 
+using Kanawanagasaki.Yamabiko.Shared.Enums;
 using Kanawanagasaki.Yamabiko.Shared.Packets;
 using System.Collections.Concurrent;
 
@@ -32,7 +33,7 @@ public class Peer
     public void RemoveExtra(byte tag)
         => _extra.TryRemove(tag, out _);
 
-    public PeerPacket ToPacket(int index)
+    public PeerPacket ToPacket(Guid requestId, int index, int total)
         => new PeerPacket
         {
             ProjectId = Project.ProjectId,
@@ -40,6 +41,9 @@ public class Peer
             Name = Name,
             Flags = Flags,
             ExtraTags = _extra.Keys.ToArray(),
-            Index = index
+            ProtectionLevel = Password is null ? EProtectionLevel.PUBLIC : EProtectionLevel.PASSWORD_PROTECTED,
+            RequestId = requestId,
+            Index = index,
+            Total = total
         };
 }

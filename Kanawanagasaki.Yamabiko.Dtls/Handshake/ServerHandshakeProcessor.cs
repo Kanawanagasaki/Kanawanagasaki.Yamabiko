@@ -9,9 +9,6 @@ using System.Security.Cryptography.X509Certificates;
 
 public class ServerHandshakeProcessor : IDisposable
 {
-    private const string HKDF_PREFIX = "dtls13";
-    private static readonly byte[] CERT_VERIFY_PREFIX = [0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x54, 0x4C, 0x53, 0x20, 0x31, 0x2E, 0x33, 0x2C, 0x20, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x20, 0x43, 0x65, 0x72, 0x74, 0x69, 0x66, 0x69, 0x63, 0x61, 0x74, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x79, 0x00];
-
     public byte[]? ServerApplicationKey { get; private set; }
     public byte[]? ServerApplicationIV { get; private set; }
     public byte[]? ClientApplicationKey { get; private set; }
@@ -67,7 +64,7 @@ public class ServerHandshakeProcessor : IDisposable
                 if (_clientHandshakeAes is null || _clientRecordNumberAes is null)
                     break;
 
-                var record = CipherTextRecord.DecryptAndParse(buffer.Span, _clientHandshakeAes, _clientHandshakeIV, _clientRecordNumberAes, ref offset);
+                var record = CipherTextRecord.DecryptAndParse(buffer.Span, _clientHandshakeAes, _clientHandshakeIV, _clientRecordNumberAes, 0, 0, ref offset);
                 if (record.Type is not ERecordType.HANDSHAKE)
                     continue;
 
@@ -77,7 +74,7 @@ public class ServerHandshakeProcessor : IDisposable
             }
             else
             {
-                var record = PlainTextRecord.Parse(buffer.Span, ref offset);
+                var record = PlainTextRecord.Parse(buffer.Span, 0, 0, ref offset);
                 if (record.Type is not ERecordType.HANDSHAKE)
                     continue;
 
@@ -254,19 +251,19 @@ public class ServerHandshakeProcessor : IDisposable
         var zeros = new byte[32];
         var earlySecret = KeyHashHelper.HKDF_Extract(zeros, zeros);
         var emptyHash = SHA256.HashData(Array.Empty<byte>());
-        var derived = KeyHashHelper.HKDF_ExpandLabel(earlySecret, "derived", emptyHash, helloHash.Length, HKDF_PREFIX);
+        var derived = KeyHashHelper.HKDF_ExpandLabel(earlySecret, "derived", emptyHash, helloHash.Length, KeyHashHelper.DTLS_PREFIX);
 
         _handshakeSecret = KeyHashHelper.HKDF_Extract(derived, sharedSecret);
-        _clientSecret = KeyHashHelper.DeriveSecret(_handshakeSecret, "c hs traffic", helloHash, HKDF_PREFIX);
-        var serverSecret = KeyHashHelper.DeriveSecret(_handshakeSecret, "s hs traffic", helloHash, HKDF_PREFIX);
+        _clientSecret = KeyHashHelper.DeriveSecret(_handshakeSecret, "c hs traffic", helloHash, KeyHashHelper.DTLS_PREFIX);
+        var serverSecret = KeyHashHelper.DeriveSecret(_handshakeSecret, "s hs traffic", helloHash, KeyHashHelper.DTLS_PREFIX);
 
-        var clientHandshakeKey = KeyHashHelper.HKDF_ExpandLabel(_clientSecret, "key", Array.Empty<byte>(), 16, HKDF_PREFIX);
-        var serverHandshakeKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "key", Array.Empty<byte>(), 16, HKDF_PREFIX);
-        var clientRecordNumberKey = KeyHashHelper.HKDF_ExpandLabel(_clientSecret, "sn", Array.Empty<byte>(), 16, HKDF_PREFIX);
-        var serverRecordNumberKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "sn", Array.Empty<byte>(), 16, HKDF_PREFIX);
+        var clientHandshakeKey = KeyHashHelper.HKDF_ExpandLabel(_clientSecret, "key", Array.Empty<byte>(), 16, KeyHashHelper.DTLS_PREFIX);
+        var serverHandshakeKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "key", Array.Empty<byte>(), 16, KeyHashHelper.DTLS_PREFIX);
+        var clientRecordNumberKey = KeyHashHelper.HKDF_ExpandLabel(_clientSecret, "sn", Array.Empty<byte>(), 16, KeyHashHelper.DTLS_PREFIX);
+        var serverRecordNumberKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "sn", Array.Empty<byte>(), 16, KeyHashHelper.DTLS_PREFIX);
 
-        _clientHandshakeIV = KeyHashHelper.HKDF_ExpandLabel(_clientSecret, "iv", Array.Empty<byte>(), 12, HKDF_PREFIX);
-        _serverHandshakeIV = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "iv", Array.Empty<byte>(), 12, HKDF_PREFIX);
+        _clientHandshakeIV = KeyHashHelper.HKDF_ExpandLabel(_clientSecret, "iv", Array.Empty<byte>(), 12, KeyHashHelper.DTLS_PREFIX);
+        _serverHandshakeIV = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "iv", Array.Empty<byte>(), 12, KeyHashHelper.DTLS_PREFIX);
 
         _serverHandshakeAes?.Dispose();
         _serverRecordNumberAes?.Dispose();
@@ -307,10 +304,10 @@ public class ServerHandshakeProcessor : IDisposable
             ]
         );
 
-        var certVerifyLength = CERT_VERIFY_PREFIX.Length + certVerifyHash.Length;
+        var certVerifyLength = KeyHashHelper.CERT_VERIFY_PREFIX.Length + certVerifyHash.Length;
         var toSign = new byte[certVerifyLength];
-        CERT_VERIFY_PREFIX.CopyTo(toSign.AsSpan(0, CERT_VERIFY_PREFIX.Length));
-        certVerifyHash.CopyTo(toSign.AsSpan(CERT_VERIFY_PREFIX.Length, certVerifyHash.Length));
+        KeyHashHelper.CERT_VERIFY_PREFIX.CopyTo(toSign.AsSpan(0, KeyHashHelper.CERT_VERIFY_PREFIX.Length));
+        certVerifyHash.CopyTo(toSign.AsSpan(KeyHashHelper.CERT_VERIFY_PREFIX.Length, certVerifyHash.Length));
 
         using var rsa = _certificate.GetRSAPrivateKey();
         if (rsa is null)
@@ -326,7 +323,7 @@ public class ServerHandshakeProcessor : IDisposable
         foreach (var buffer in SerializeCipherText(serverCertVerifyMessage, 2, 2))
             yield return buffer;
 
-        var finishedKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "finished", Array.Empty<byte>(), 32, HKDF_PREFIX);
+        var finishedKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "finished", Array.Empty<byte>(), 32, KeyHashHelper.DTLS_PREFIX);
         var finishedHash = KeyHashHelper.HashFragments(
             [
                 _clientHelloMessage.GetFragment(),
@@ -388,7 +385,7 @@ public class ServerHandshakeProcessor : IDisposable
         if (serverFinishedMessage.Handshake is not FinishedHandshake)
             return GetAlertCipherText(EAlertType.INTERNAL_ERROR) ?? GetAlertPlainText(EAlertType.INTERNAL_ERROR);
 
-        var finishedKey = KeyHashHelper.HKDF_ExpandLabel(_clientSecret, "finished", Array.Empty<byte>(), 32, HKDF_PREFIX);
+        var finishedKey = KeyHashHelper.HKDF_ExpandLabel(_clientSecret, "finished", Array.Empty<byte>(), 32, KeyHashHelper.DTLS_PREFIX);
         var hash = KeyHashHelper.HashFragments(
             [
                 clientHelloMessage.GetFragment(),
@@ -406,17 +403,17 @@ public class ServerHandshakeProcessor : IDisposable
             return GetAlertCipherText(EAlertType.HANDSHAKE_FAILURE) ?? GetAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
 
         var zeros = new byte[32];
-        var derivedSecret = KeyHashHelper.HKDF_ExpandLabel(_handshakeSecret, "derived", Array.Empty<byte>(), 32, HKDF_PREFIX);
+        var derivedSecret = KeyHashHelper.HKDF_ExpandLabel(_handshakeSecret, "derived", Array.Empty<byte>(), 32, KeyHashHelper.DTLS_PREFIX);
         var masterSecret = KeyHashHelper.HKDF_Extract(derivedSecret, zeros);
-        var clientSecret = KeyHashHelper.HKDF_ExpandLabel(masterSecret, "c ap traffic", hash, 32, HKDF_PREFIX);
-        var serverSecret = KeyHashHelper.HKDF_ExpandLabel(masterSecret, "s ap traffic", hash, 32, HKDF_PREFIX);
+        var clientSecret = KeyHashHelper.HKDF_ExpandLabel(masterSecret, "c ap traffic", hash, 32, KeyHashHelper.DTLS_PREFIX);
+        var serverSecret = KeyHashHelper.HKDF_ExpandLabel(masterSecret, "s ap traffic", hash, 32, KeyHashHelper.DTLS_PREFIX);
 
-        ClientApplicationKey = KeyHashHelper.HKDF_ExpandLabel(clientSecret, "key", Array.Empty<byte>(), 16, HKDF_PREFIX);
-        ServerApplicationKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "key", Array.Empty<byte>(), 16, HKDF_PREFIX);
-        ClientApplicationIV = KeyHashHelper.HKDF_ExpandLabel(clientSecret, "iv", Array.Empty<byte>(), 12, HKDF_PREFIX);
-        ServerApplicationIV = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "iv", Array.Empty<byte>(), 12, HKDF_PREFIX);
-        ClientRecordNumberKey = KeyHashHelper.HKDF_ExpandLabel(clientSecret, "sn", Array.Empty<byte>(), 16, HKDF_PREFIX);
-        ServerRecordNumberKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "sn", Array.Empty<byte>(), 16, HKDF_PREFIX);
+        ClientApplicationKey = KeyHashHelper.HKDF_ExpandLabel(clientSecret, "key", Array.Empty<byte>(), 16, KeyHashHelper.DTLS_PREFIX);
+        ServerApplicationKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "key", Array.Empty<byte>(), 16, KeyHashHelper.DTLS_PREFIX);
+        ClientApplicationIV = KeyHashHelper.HKDF_ExpandLabel(clientSecret, "iv", Array.Empty<byte>(), 12, KeyHashHelper.DTLS_PREFIX);
+        ServerApplicationIV = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "iv", Array.Empty<byte>(), 12, KeyHashHelper.DTLS_PREFIX);
+        ClientRecordNumberKey = KeyHashHelper.HKDF_ExpandLabel(clientSecret, "sn", Array.Empty<byte>(), 16, KeyHashHelper.DTLS_PREFIX);
+        ServerRecordNumberKey = KeyHashHelper.HKDF_ExpandLabel(serverSecret, "sn", Array.Empty<byte>(), 16, KeyHashHelper.DTLS_PREFIX);
 
         var ack = new Ack(2, 0);
         var ackBuffer = new byte[ack.Length()];
@@ -424,7 +421,7 @@ public class ServerHandshakeProcessor : IDisposable
         var record = new CipherTextRecord(ackBuffer)
         {
             Type = ERecordType.ACK,
-            EpochLowBits = 3,
+            Epoch = 3,
             RecordNumber = 0
         };
 
@@ -451,7 +448,7 @@ public class ServerHandshakeProcessor : IDisposable
         var record = new PlainTextRecord(alertBuffer)
         {
             Type = ERecordType.ALERT,
-            KeyEpoch = 0,
+            Epoch = 0,
             RecordNumber = 0
         };
         var recordBuffer = new byte[record.Length()];
@@ -476,8 +473,8 @@ public class ServerHandshakeProcessor : IDisposable
         var record = new CipherTextRecord(alertBuffer)
         {
             Type = ERecordType.ALERT,
-            EpochLowBits = 2,
-            RecordNumber = (ushort)_serverSeqNumToMessage.Count
+            Epoch = 2,
+            RecordNumber = (ulong)_serverSeqNumToMessage.Count
         };
         var recordBuffer = new byte[record.Length()];
         record.EncryptAndWrite(recordBuffer, _serverHandshakeAes, _serverHandshakeIV, _serverRecordNumberAes);
@@ -498,7 +495,7 @@ public class ServerHandshakeProcessor : IDisposable
             var record = new PlainTextRecord(fragmentBuffer)
             {
                 Type = ERecordType.HANDSHAKE,
-                KeyEpoch = 0,
+                Epoch = 0,
                 RecordNumber = 0
             };
 
@@ -509,7 +506,7 @@ public class ServerHandshakeProcessor : IDisposable
         }
     }
 
-    private IEnumerable<byte[]> SerializeCipherText(HandshakeMessage message, byte epoch, ushort recordNumber)
+    private IEnumerable<byte[]> SerializeCipherText(HandshakeMessage message, ulong epoch, ulong recordNumber)
     {
         if (_serverHandshakeAes is null)
             yield break;
@@ -529,7 +526,7 @@ public class ServerHandshakeProcessor : IDisposable
             var record = new CipherTextRecord(fragmentBuffer)
             {
                 Type = ERecordType.HANDSHAKE,
-                EpochLowBits = epoch,
+                Epoch = epoch,
                 RecordNumber = recordNumber
             };
 

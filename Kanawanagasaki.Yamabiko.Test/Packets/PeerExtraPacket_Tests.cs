@@ -8,6 +8,7 @@ public class PeerExtraPacket_Tests
     private static PeerExtraPacket CreateRandomPeerExtraPacket()
         => new PeerExtraPacket
         {
+            RequestId = Guid.NewGuid(),
             PeerId = Guid.NewGuid(),
             Tag = (byte)Random.Shared.Next(0, 256),
             Data = RandomNumberGenerator.GetBytes(255)
@@ -23,6 +24,7 @@ public class PeerExtraPacket_Tests
 
         var parsed = Assert.IsType<PeerExtraPacket>(Packet.Parse(buffer));
 
+        Assert.Equal(packet.RequestId, parsed.RequestId);
         Assert.Equal(packet.PeerId, parsed.PeerId);
         Assert.Equal(packet.Tag, parsed.Tag);
         Assert.Equal(packet.Data, parsed.Data);

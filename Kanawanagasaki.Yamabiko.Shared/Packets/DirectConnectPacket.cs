@@ -10,6 +10,8 @@ public class DirectConnectPacket : Packet
     public const EPacketType TYPE = EPacketType.DIRECT_CONNECT;
     public override EPacketType Type => TYPE;
 
+    public required Guid ConnectionId { get; init; }
+    
     private byte[] _publicKey = Array.Empty<byte>();
     public required byte[] PublicKey
     {
@@ -29,6 +31,8 @@ public class DirectConnectPacket : Packet
     {
         int len = 0;
 
+        len += BinaryHelper.BytesCount(ConnectionId);
+
         len += BinaryHelper.BytesCount(PublicKey);
 
         len += BinaryHelper.BytesCount(Ip);
@@ -41,6 +45,8 @@ public class DirectConnectPacket : Packet
     protected override void InternalWrite(Span<byte> buffer)
     {
         int offset = 0;
+
+        BinaryHelper.Write(ConnectionId, buffer, ref offset);
 
         BinaryHelper.Write(PublicKey, buffer, ref offset);
 
@@ -55,6 +61,8 @@ public class DirectConnectPacket : Packet
         {
             int offset = 0;
 
+            var connectionId = BinaryHelper.ReadGuid(buffer, ref offset);
+
             var publicKey = BinaryHelper.ReadByteArray(buffer, ref offset);
 
             var ip = BinaryHelper.ReadIPAddress(buffer, ref offset);
@@ -63,6 +71,7 @@ public class DirectConnectPacket : Packet
 
             return new DirectConnectPacket
             {
+                ConnectionId = connectionId,
                 PublicKey = publicKey ?? Array.Empty<byte>(),
                 Ip = ip,
                 Port = port

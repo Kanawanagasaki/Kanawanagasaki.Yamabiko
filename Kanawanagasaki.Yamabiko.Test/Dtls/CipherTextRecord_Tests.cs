@@ -23,11 +23,11 @@ public class CipherTextRecord_Tests
         headerAes.Padding = PaddingMode.None;
 
         int offset = 0;
-        var record = CipherTextRecord.DecryptAndParse(data, aes, iv, headerAes, ref offset);
+        var record = CipherTextRecord.DecryptAndParse(data, aes, iv, headerAes, 0, 0, ref offset);
 
         Assert.Null(record.ConnectionId);
-        Assert.Equal(0x0000, record.RecordNumber);
-        Assert.Equal(0x02, record.EpochLowBits);
+        Assert.Equal(0x0000uL, record.RecordNumber);
+        Assert.Equal(0x02uL, record.Epoch);
         Assert.Equal(decrypted, record.Buffer);
         Assert.Equal(ERecordType.HANDSHAKE, record.Type);
 
@@ -59,11 +59,11 @@ public class CipherTextRecord_Tests
         headerAes.Padding = PaddingMode.None;
 
         int offset = 0;
-        var record = CipherTextRecord.DecryptAndParse(data, aes, iv, headerAes, ref offset);
+        var record = CipherTextRecord.DecryptAndParse(data, aes, iv, headerAes, 0, 0, ref offset);
 
         Assert.Null(record.ConnectionId);
-        Assert.Equal(0x0001, record.RecordNumber);
-        Assert.Equal(0x02, record.EpochLowBits);
+        Assert.Equal(0x0001uL, record.RecordNumber);
+        Assert.Equal(0x02uL, record.Epoch);
         Assert.Equal(decrypted, record.Buffer);
         Assert.Equal(ERecordType.HANDSHAKE, record.Type);
 
@@ -97,7 +97,7 @@ public class CipherTextRecord_Tests
         var record = new CipherTextRecord(data)
         {
             Type = ERecordType.APPLICATION_DATA,
-            EpochLowBits = 3,
+            Epoch = 3,
             RecordNumber = 123
         };
 
@@ -107,11 +107,143 @@ public class CipherTextRecord_Tests
         record.EncryptAndWrite(buffer, aes, iv, headerAes);
 
         int offset = 0;
-        var parsedRecord = CipherTextRecord.DecryptAndParse(buffer, aes, iv, headerAes, ref offset);
+        var parsedRecord = CipherTextRecord.DecryptAndParse(buffer, aes, iv, headerAes, 0, 0, ref offset);
 
         Assert.Equal(data, parsedRecord.Buffer);
         Assert.Equal(ERecordType.APPLICATION_DATA, parsedRecord.Type);
-        Assert.Equal(123, parsedRecord.RecordNumber);
-        Assert.Equal(3, parsedRecord.EpochLowBits);
+        Assert.Equal(123uL, parsedRecord.RecordNumber);
+        Assert.Equal(3uL, parsedRecord.Epoch);
+    }
+
+
+    [Fact]
+    public void WriteAndParse_RandomData_ConnectionId()
+    {
+        var data = RandomNumberGenerator.GetBytes(32);
+
+        var key = new byte[] { 0x00, 0x4e, 0x03, 0xe6, 0x4a, 0xb6, 0xcb, 0xa6, 0xb5, 0x42, 0x77, 0x5e, 0xc2, 0x30, 0xe2, 0x0a };
+        var iv = new byte[] { 0x6d, 0x99, 0x24, 0xbe, 0x04, 0x4e, 0xe9, 0x7c, 0x62, 0x49, 0x13, 0xf2 };
+        var headerKey = new byte[] { 0x71, 0x73, 0xfa, 0xc5, 0x11, 0x94, 0xe7, 0x75, 0x00, 0x1d, 0x62, 0x5e, 0xf6, 0x9d, 0x7c, 0x9f };
+
+        using var aes = new AesGcm(key, AesGcm.TagByteSizes.MaxSize);
+        using var headerAes = Aes.Create();
+        headerAes.KeySize = 128;
+        headerAes.Key = headerKey;
+        headerAes.Mode = CipherMode.ECB;
+        headerAes.Padding = PaddingMode.None;
+
+        var record = new CipherTextRecord(data)
+        {
+            Type = ERecordType.APPLICATION_DATA,
+            Epoch = 3,
+            RecordNumber = 123,
+            ConnectionId = RandomNumberGenerator.GetBytes(Random.Shared.Next(1, 100))
+        };
+
+        var length = record.Length();
+        var buffer = new byte[length];
+
+        record.EncryptAndWrite(buffer, aes, iv, headerAes);
+
+        Assert.Equal(record.ConnectionId, CipherTextRecord.ReadConnectionId(buffer, record.ConnectionId.Length, 0));
+
+        int offset = 0;
+        var parsedRecord = CipherTextRecord.DecryptAndParse(buffer, aes, iv, headerAes, 0, 0, record.ConnectionId.Length, ref offset);
+
+        Assert.Equal(data, parsedRecord.Buffer);
+        Assert.Equal(ERecordType.APPLICATION_DATA, parsedRecord.Type);
+        Assert.Equal(123uL, parsedRecord.RecordNumber);
+        Assert.Equal(3uL, parsedRecord.Epoch);
+        Assert.Equal(record.ConnectionId, parsedRecord.ConnectionId);
+    }
+
+    [Fact]
+    public void Multiple_WriteAndParse_RandomData_RecordNumberIncrement()
+    {
+        var key = new byte[] { 0x00, 0x4e, 0x03, 0xe6, 0x4a, 0xb6, 0xcb, 0xa6, 0xb5, 0x42, 0x77, 0x5e, 0xc2, 0x30, 0xe2, 0x0a };
+        var iv = new byte[] { 0x6d, 0x99, 0x24, 0xbe, 0x04, 0x4e, 0xe9, 0x7c, 0x62, 0x49, 0x13, 0xf2 };
+        var headerKey = new byte[] { 0x71, 0x73, 0xfa, 0xc5, 0x11, 0x94, 0xe7, 0x75, 0x00, 0x1d, 0x62, 0x5e, 0xf6, 0x9d, 0x7c, 0x9f };
+
+        using var aes = new AesGcm(key, AesGcm.TagByteSizes.MaxSize);
+        using var headerAes = Aes.Create();
+        headerAes.KeySize = 128;
+        headerAes.Key = headerKey;
+        headerAes.Mode = CipherMode.ECB;
+        headerAes.Padding = PaddingMode.None;
+
+        ulong recordNumber = 0;
+        ulong lastRecordNumber = 0;
+        while (recordNumber < ushort.MaxValue * 100)
+        {
+            var data = RandomNumberGenerator.GetBytes(32);
+
+            var record = new CipherTextRecord(data)
+            {
+                Type = ERecordType.APPLICATION_DATA,
+                Epoch = 3,
+                RecordNumber = recordNumber
+            };
+
+            var length = record.Length();
+            var buffer = new byte[length];
+
+            record.EncryptAndWrite(buffer, aes, iv, headerAes);
+
+            int offset = 0;
+            var parsedRecord = CipherTextRecord.DecryptAndParse(buffer, aes, iv, headerAes, 0, lastRecordNumber, ref offset);
+
+            Assert.Equal(data, parsedRecord.Buffer);
+            Assert.Equal(ERecordType.APPLICATION_DATA, parsedRecord.Type);
+            Assert.Equal(record.RecordNumber, parsedRecord.RecordNumber);
+            Assert.Equal(record.Epoch, parsedRecord.Epoch);
+
+            lastRecordNumber = recordNumber;
+            recordNumber += (ulong)Random.Shared.Next(1, ushort.MaxValue / 3);
+        }
+    }
+
+    [Fact]
+    public void Multiple_WriteAndParse_RandomData_RecordNumberIncrement_OneByteRecordNumber_NoLength()
+    {
+        var key = new byte[] { 0x00, 0x4e, 0x03, 0xe6, 0x4a, 0xb6, 0xcb, 0xa6, 0xb5, 0x42, 0x77, 0x5e, 0xc2, 0x30, 0xe2, 0x0a };
+        var iv = new byte[] { 0x6d, 0x99, 0x24, 0xbe, 0x04, 0x4e, 0xe9, 0x7c, 0x62, 0x49, 0x13, 0xf2 };
+        var headerKey = new byte[] { 0x71, 0x73, 0xfa, 0xc5, 0x11, 0x94, 0xe7, 0x75, 0x00, 0x1d, 0x62, 0x5e, 0xf6, 0x9d, 0x7c, 0x9f };
+
+        using var aes = new AesGcm(key, AesGcm.TagByteSizes.MaxSize);
+        using var headerAes = Aes.Create();
+        headerAes.KeySize = 128;
+        headerAes.Key = headerKey;
+        headerAes.Mode = CipherMode.ECB;
+        headerAes.Padding = PaddingMode.None;
+
+        ulong recordNumber = 0;
+        ulong lastRecordNumber = 0;
+        while (recordNumber < byte.MaxValue * 100)
+        {
+            var data = RandomNumberGenerator.GetBytes(32);
+
+            var record = new CipherTextRecord(data)
+            {
+                Type = ERecordType.APPLICATION_DATA,
+                Epoch = 3,
+                RecordNumber = recordNumber
+            };
+
+            var length = record.Length(false, false);
+            var buffer = new byte[length];
+
+            record.EncryptAndWrite(buffer, aes, iv, headerAes, false, false);
+
+            int offset = 0;
+            var parsedRecord = CipherTextRecord.DecryptAndParse(buffer, aes, iv, headerAes, 0, lastRecordNumber, ref offset);
+
+            Assert.Equal(data, parsedRecord.Buffer);
+            Assert.Equal(ERecordType.APPLICATION_DATA, parsedRecord.Type);
+            Assert.Equal(record.RecordNumber, parsedRecord.RecordNumber);
+            Assert.Equal(record.Epoch, parsedRecord.Epoch);
+
+            lastRecordNumber = recordNumber;
+            recordNumber += (ulong)Random.Shared.Next(1, byte.MaxValue / 3);
+        }
     }
 }

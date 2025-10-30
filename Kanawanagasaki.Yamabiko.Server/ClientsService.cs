@@ -35,7 +35,7 @@ public static class ClientsService
                 var record = new PlainTextRecord(alertBuffer)
                 {
                     Type = ERecordType.ALERT,
-                    KeyEpoch = 0,
+                    Epoch = 0,
                     RecordNumber = 0
                 };
                 var recordBuffer = new byte[record.Length()];
@@ -53,7 +53,7 @@ public static class ClientsService
                 var record = new PlainTextRecord(alertBuffer)
                 {
                     Type = ERecordType.ALERT,
-                    KeyEpoch = 0,
+                    Epoch = 0,
                     RecordNumber = 0
                 };
                 var recordBuffer = new byte[record.Length()];

@@ -65,6 +65,10 @@ public abstract class Packet
                 return QueryPacket.InternalParse(buffer.Slice(4, length));
             case EPacketType.QUERY_EXTRA:
                 return QueryExtraPacket.InternalParse(buffer.Slice(4, length));
+            case EPacketType.EMPTY_QUERY_RESULT:
+                return EmptyQueryResultPacket.InternalParse(buffer.Slice(4, length));
+            case EPacketType.EMPTY_QUERY_EXTRA_RESULT:
+                return EmptyQueryExtraResultPacket.InternalParse(buffer.Slice(4, length));
             case EPacketType.PEER:
                 return PeerPacket.InternalParse(buffer.Slice(4, length));
             case EPacketType.PEER_EXTRA:

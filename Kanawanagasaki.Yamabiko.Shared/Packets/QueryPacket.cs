@@ -8,6 +8,8 @@ public class QueryPacket : Packet
     public const EPacketType TYPE = EPacketType.QUERY;
     public override EPacketType Type => TYPE;
 
+    public required Guid RequestId { get; init; }
+    
     public required Guid ProjectId { get; init; }
 
     public ulong Flags { get; init; }
@@ -36,9 +38,26 @@ public class QueryPacket : Packet
 
     public byte Count { get; init; } = 24;
 
+    public QueryPacket CopyWithRange(ushort skip, byte count)
+        => new QueryPacket
+        {
+            RequestId = RequestId,
+            ProjectId = ProjectId,
+            Flags = Flags,
+            ProtectionLevel = ProtectionLevel,
+            OrderBy = OrderBy,
+            FilterTag = FilterTag,
+            Filter = Filter,
+            FilterOperation = FilterOperation,
+            Skip = skip,
+            Count = count
+        };
+
     protected override int InternalLength()
     {
         int len = 0;
+
+        len += BinaryHelper.BytesCount(RequestId);
 
         len += BinaryHelper.BytesCount(ProjectId);
 
@@ -65,6 +84,8 @@ public class QueryPacket : Packet
     {
         int offset = 0;
 
+        BinaryHelper.Write(RequestId, buffer, ref offset);
+
         BinaryHelper.Write(ProjectId, buffer, ref offset);
 
         BinaryHelper.Write(Flags, buffer, ref offset);
@@ -90,6 +111,8 @@ public class QueryPacket : Packet
         {
             int offset = 0;
 
+            var requestId = BinaryHelper.ReadGuid(buffer, ref offset);
+
             var projectId = BinaryHelper.ReadGuid(buffer, ref offset);
 
             var flags = BinaryHelper.ReadUInt64(buffer, ref offset);
@@ -110,6 +133,7 @@ public class QueryPacket : Packet
 
             return new QueryPacket
             {
+                RequestId = requestId,
                 ProjectId = projectId,
                 Flags = flags,
                 ProtectionLevel = protectionLevel,

@@ -58,7 +58,7 @@ public class Project
     public IEnumerable<Client> GetSubscribers()
         => _subsribers.Values;
 
-    public IEnumerable<Peer> Query(QueryPacket query)
+    public (int total, IEnumerable<Peer> res) Query(QueryPacket query)
     {
         bool flagsCheck(Peer p) => (p.Flags & query.Flags) == query.Flags;
         bool protectionCheck(Peer p) => query.ProtectionLevel.HasFlag(EProtectionLevel.PASSWORD_PROTECTED) ? p.Password is not null
@@ -114,17 +114,17 @@ public class Project
             }
         }
 
-        return _peers.Values.Where(x => flagsCheck(x) && protectionCheck(x) && filterCheck(x))
-                            .Skip(query.Skip)
-                            .Take(query.Count);
-    }
-
-    private static int CompareByteArrayLex(byte[] a, byte[] b)
-    {
-        var n = Math.Min(a.Length, b.Length);
-        for (int i = 0; i < n; i++)
-            if (a[i] != b[i])
-                return a[i].CompareTo(b[i]);
-        return a.Length.CompareTo(b.Length);
+        var where = _peers.Values.Where(x => flagsCheck(x) && protectionCheck(x) && filterCheck(x));
+        var ordered = query.OrderBy switch
+        {
+            EOrderBy.NAME_ASC => where.OrderBy(x => x.Name),
+            EOrderBy.NAME_DESC => where.OrderByDescending(x => x.Name),
+            EOrderBy.TIME_DESC => where.OrderByDescending(x => x.Client.PeerId),
+            EOrderBy.RANDOM => where.OrderBy(_ => Random.Shared.NextDouble()),
+            _ => where.OrderBy(x => x.Client.PeerId)
+        };
+        var total = ordered.Count();
+        var res = ordered.Skip(query.Skip).Take(query.Count);
+        return (total, res);
     }
 }

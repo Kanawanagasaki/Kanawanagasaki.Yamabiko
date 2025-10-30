@@ -9,6 +9,8 @@ public class ConnectDenyPacket : Packet
     public const EPacketType TYPE = EPacketType.CONNECT_DENY;
     public override EPacketType Type => TYPE;
 
+    public required Guid ConnectionId { get; init; }
+
     public required Guid PeerId { get; init; }
 
     private string? _reason;
@@ -27,6 +29,8 @@ public class ConnectDenyPacket : Packet
     {
         int len = 0;
 
+        len += BinaryHelper.BytesCount(ConnectionId);
+
         len += BinaryHelper.BytesCount(PeerId);
 
         len += BinaryHelper.BytesCount(Reason);
@@ -37,6 +41,8 @@ public class ConnectDenyPacket : Packet
     protected override void InternalWrite(Span<byte> buffer)
     {
         int offset = 0;
+
+        BinaryHelper.Write(ConnectionId, buffer, ref offset);
 
         BinaryHelper.Write(PeerId, buffer, ref offset);
 
@@ -49,12 +55,15 @@ public class ConnectDenyPacket : Packet
         {
             int offset = 0;
 
+            var connectionId = BinaryHelper.ReadGuid(buffer, ref offset);
+
             var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
 
             var reason = BinaryHelper.ReadString(buffer, ref offset);
 
             return new ConnectDenyPacket
             {
+                ConnectionId = connectionId,
                 PeerId = peerId,
                 Reason = reason
             };

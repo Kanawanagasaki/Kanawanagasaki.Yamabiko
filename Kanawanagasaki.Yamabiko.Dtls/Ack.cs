@@ -3,12 +3,12 @@
 public class Ack
 {
     public ulong Epoch { get; }
-    public ulong SequenceNumber { get; }
+    public ulong RecordNumber { get; }
 
     public Ack(ulong epoch, ulong sequenceNumber)
     {
         Epoch = epoch;
-        SequenceNumber = sequenceNumber;
+        RecordNumber = sequenceNumber;
     }
 
     public int Length()
@@ -31,17 +31,17 @@ public class Ack
         buffer[8] = (byte)((Epoch >> 8) & 0xFF);
         buffer[9] = (byte)(Epoch & 0xFF);
 
-        buffer[10] = (byte)((SequenceNumber >> 56) & 0xFF);
-        buffer[11] = (byte)((SequenceNumber >> 48) & 0xFF);
-        buffer[12] = (byte)((SequenceNumber >> 40) & 0xFF);
-        buffer[13] = (byte)((SequenceNumber >> 32) & 0xFF);
-        buffer[14] = (byte)((SequenceNumber >> 24) & 0xFF);
-        buffer[15] = (byte)((SequenceNumber >> 16) & 0xFF);
-        buffer[16] = (byte)((SequenceNumber >> 8) & 0xFF);
-        buffer[17] = (byte)(SequenceNumber & 0xFF);
+        buffer[10] = (byte)((RecordNumber >> 56) & 0xFF);
+        buffer[11] = (byte)((RecordNumber >> 48) & 0xFF);
+        buffer[12] = (byte)((RecordNumber >> 40) & 0xFF);
+        buffer[13] = (byte)((RecordNumber >> 32) & 0xFF);
+        buffer[14] = (byte)((RecordNumber >> 24) & 0xFF);
+        buffer[15] = (byte)((RecordNumber >> 16) & 0xFF);
+        buffer[16] = (byte)((RecordNumber >> 8) & 0xFF);
+        buffer[17] = (byte)(RecordNumber & 0xFF);
     }
 
-    public static Ack Parse(Span<byte> buffer)
+    public static Ack Parse(ReadOnlySpan<byte> buffer)
     {
         if (buffer.Length < 18)
             throw new FormatException("Buffer too small");
