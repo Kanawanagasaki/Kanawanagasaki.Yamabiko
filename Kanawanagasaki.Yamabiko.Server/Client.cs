@@ -32,9 +32,18 @@ public class Client : IDisposable
 
     private HashSet<Guid> _subscribedProjects = [];
 
-    public Client(IPEndPoint endPoint)
+    private readonly Settings _settings;
+    private readonly ITransport _transport;
+    private readonly ClientsService _clientsService;
+    private readonly ProjectsService _projectsService;
+
+    public Client(IPEndPoint endPoint, Settings settings, ITransport transport, ClientsService clientsService, ProjectsService projectsService)
     {
         EndPoint = endPoint;
+        _settings = settings;
+        _transport = transport;
+        _clientsService = clientsService;
+        _projectsService = projectsService;
     }
 
     public async Task ProcessBufferAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct)
@@ -52,12 +61,12 @@ public class Client : IDisposable
         if (isHandshakePacket)
         {
             if (_handshakeProcessor is null)
-                _handshakeProcessor = new ServerHandshakeProcessor(Settings.Certificate, Settings.MTU);
+                _handshakeProcessor = new ServerHandshakeProcessor(_settings.Certificate, _settings.MTU);
 
             try
             {
                 foreach (var resultBuffer in _handshakeProcessor.ProcessPacket(buffer))
-                    await UdpService.SendPacketAsync(EndPoint, resultBuffer, ct);
+                    await _transport.SendAsync(EndPoint, resultBuffer, ct);
             }
             catch
             {
@@ -111,7 +120,7 @@ public class Client : IDisposable
                     {
                         var alert = Alert.Parse(record.Buffer);
                         if (alert.Type is EAlertType.CLOSE_NOTIFY)
-                            ClientsService.RemoveClient(EndPoint);
+                            _clientsService.RemoveClient(EndPoint);
                     }
                 }
             }
@@ -124,9 +133,9 @@ public class Client : IDisposable
                         _clientLastRecordNumber = record.RecordNumber;
                     if (record.Type is ERecordType.ALERT)
                     {
-                        var alert = Alert.Parse(record.Buffer);
+                        var alert = Alert.Parse(record.Buffer.Span);
                         if (alert.Type is EAlertType.CLOSE_NOTIFY)
-                            ClientsService.RemoveClient(EndPoint);
+                            _clientsService.RemoveClient(EndPoint);
                     }
                     else
                     {
@@ -148,7 +157,7 @@ public class Client : IDisposable
 
     private async Task ProcessRecordAsync(CipherTextRecord record, CancellationToken ct)
     {
-        var packet = Packet.Parse(record.Buffer);
+        var packet = Packet.Parse(record.Buffer.Span);
         switch (packet)
         {
             case PingPacket ping:
@@ -195,10 +204,10 @@ public class Client : IDisposable
 
     private async Task ProcessAdvertiseAsync(AdvertisePacket ad, CipherTextRecord record, CancellationToken ct)
     {
-        var peer = ProjectsService.ProcessAdvertisement(this, ad);
+        var peer = _projectsService.ProcessAdvertisement(this, ad);
         await SendAckAsync(record, ct);
 
-        var project = ProjectsService.GetProject(ad.ProjectId);
+        var project = _projectsService.GetProject(ad.ProjectId);
         if (project is not null)
         {
             foreach (var subscriber in project.GetSubscribers())
@@ -208,14 +217,15 @@ public class Client : IDisposable
 
     private async Task ProcessAdvertiseExtraAsync(AdvertiseExtraPacket adExtra, CipherTextRecord record, CancellationToken ct)
     {
-        ProjectsService.ProcessAdvertisementExtra(PeerId, adExtra);
+        _projectsService.ProcessAdvertisementExtra(PeerId, adExtra);
         await SendAckAsync(record, ct);
 
-        var project = ProjectsService.GetProject(adExtra.ProjectId);
+        var project = _projectsService.GetProject(adExtra.ProjectId);
         if (project is not null)
         {
             var peerExtra = new PeerExtraPacket
             {
+                RequestId = Guid.Empty,
                 PeerId = PeerId,
                 Tag = adExtra.Tag,
                 Data = adExtra.Data,
@@ -227,7 +237,7 @@ public class Client : IDisposable
 
     private async Task ProcessStopAdvertisingAsync(StopAdvertisingPacket stopAd, CipherTextRecord record, CancellationToken ct)
     {
-        ProjectsService.RemovePeer(PeerId);
+        _projectsService.RemovePeer(PeerId);
         await SendAckAsync(record, ct);
     }
 
@@ -236,7 +246,7 @@ public class Client : IDisposable
         if (_subscribedProjects.Count < 8)
         {
             _subscribedProjects.Add(subscribe.ProjectId);
-            ProjectsService.ProcessSubscribe(this, subscribe);
+            _projectsService.ProcessSubscribe(this, subscribe);
         }
 
         await SendAckAsync(record, ct);
@@ -245,13 +255,13 @@ public class Client : IDisposable
     private async Task ProcessUnsubscribeAsync(UnsubscribePacket unsubscribe, CipherTextRecord record, CancellationToken ct)
     {
         _subscribedProjects.Remove(unsubscribe.ProjectId);
-        ProjectsService.ProcessUnsubscribe(PeerId, unsubscribe);
+        _projectsService.ProcessUnsubscribe(PeerId, unsubscribe);
         await SendAckAsync(record, ct);
     }
 
     private async Task ProcessQueryAsync(QueryPacket query, CancellationToken ct)
     {
-        var project = ProjectsService.GetProject(query.ProjectId);
+        var project = _projectsService.GetProject(query.ProjectId);
         if (project is null)
         {
             var emptyRes = new EmptyQueryResultPacket
@@ -287,18 +297,20 @@ public class Client : IDisposable
             var emptyRes = new EmptyQueryExtraResultPacket
             {
                 RequestId = queryExtra.RequestId,
+                PeerId = PeerId,
                 TagsIds = queryExtra.TagsIds
             };
             await SendPacketsAsync([emptyRes], ct);
             return;
         }
 
-        var peer = ProjectsService.GetPeer(queryExtra.PeerId);
+        var peer = _projectsService.GetPeer(queryExtra.PeerId);
         if (peer is null)
         {
             var emptyRes = new EmptyQueryExtraResultPacket
             {
                 RequestId = queryExtra.RequestId,
+                PeerId = PeerId,
                 TagsIds = queryExtra.TagsIds
             };
             return;
@@ -309,6 +321,7 @@ public class Client : IDisposable
         {
             extras.Add(new PeerExtraPacket
             {
+                RequestId = queryExtra.RequestId,
                 PeerId = PeerId,
                 Tag = tag,
                 Data = peer.GetExtra(tag)
@@ -320,11 +333,12 @@ public class Client : IDisposable
 
     private async Task ProcessConnectAsync(ConnectPacket connect, CancellationToken ct)
     {
-        var peer = ProjectsService.GetPeer(connect.PeerId);
+        var peer = _projectsService.GetPeer(connect.PeerId);
         if (peer is null)
         {
             var connectDeny = new ConnectDenyPacket
             {
+                ConnectionId = connect.ConnectionId,
                 PeerId = connect.PeerId,
                 Reason = "Peer not found"
             };
@@ -336,6 +350,7 @@ public class Client : IDisposable
         {
             var connectDeny = new ConnectDenyPacket
             {
+                ConnectionId = connect.ConnectionId,
                 PeerId = connect.PeerId,
                 Reason = "Incorrect password"
             };
@@ -345,6 +360,7 @@ public class Client : IDisposable
 
         var peerConnect = new PeerConnectPacket
         {
+            ConnectionId = connect.ConnectionId,
             PeerId = PeerId,
             PublicKey = connect.PublicKey,
             Ip = EndPoint.Address,
@@ -355,7 +371,7 @@ public class Client : IDisposable
 
     private async Task ProcessConnectDenyAsync(ConnectDenyPacket connectDeny, CancellationToken ct)
     {
-        var peer = ProjectsService.GetPeer(connectDeny.PeerId);
+        var peer = _projectsService.GetPeer(connectDeny.PeerId);
         if (peer is null)
             return;
 
@@ -370,7 +386,7 @@ public class Client : IDisposable
 
     private async Task ProcessDirectConnectAsync(DirectConnectPacket directConnect, CancellationToken ct)
     {
-        var client = ClientsService.GetClientByEndpoint(directConnect.Ip, directConnect.Port);
+        var client = _clientsService.GetClientByEndpoint(directConnect.Ip, directConnect.Port);
         if (client is null)
             return;
 
@@ -402,7 +418,7 @@ public class Client : IDisposable
             };
             var buffer = new byte[record.Length()];
             record.EncryptAndWrite(buffer, _serverAes, _serverAesIV, _serverHeaderAes);
-            await UdpService.SendPacketAsync(EndPoint, buffer, ct);
+            await _transport.SendAsync(EndPoint, buffer, ct);
         }
         else
         {
@@ -419,9 +435,9 @@ public class Client : IDisposable
                 var buffer = new byte[record.Length()];
                 record.EncryptAndWrite(buffer, _serverAes, _serverAesIV, _serverHeaderAes);
 
-                if (Settings.MTU < ms.Length + buffer.Length)
+                if (_settings.MTU < ms.Length + buffer.Length)
                 {
-                    await UdpService.SendPacketAsync(EndPoint, ms.ToArray(), ct);
+                    await _transport.SendAsync(EndPoint, ms.ToArray(), ct);
                     ms.SetLength(0);
                 }
 
@@ -429,7 +445,7 @@ public class Client : IDisposable
             }
 
             if (0 < ms.Length)
-                await UdpService.SendPacketAsync(EndPoint, ms.ToArray(), ct);
+                await _transport.SendAsync(EndPoint, ms.ToArray(), ct);
         }
     }
 
@@ -450,7 +466,7 @@ public class Client : IDisposable
         };
         var buffer = new byte[record.Length()];
         record.EncryptAndWrite(buffer, _serverAes, _serverAesIV, _serverHeaderAes);
-        await UdpService.SendPacketAsync(EndPoint, buffer, ct);
+        await _transport.SendAsync(EndPoint, buffer, ct);
     }
 
     public async Task SendAlertBufferAsync(EAlertType alertType, CancellationToken ct)
@@ -492,7 +508,7 @@ public class Client : IDisposable
             record.Write(buffer);
         }
 
-        await UdpService.SendPacketAsync(EndPoint, buffer, ct);
+        await _transport.SendAsync(EndPoint, buffer, ct);
     }
 
     public void Dispose()

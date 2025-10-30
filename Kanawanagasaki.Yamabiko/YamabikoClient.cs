@@ -78,7 +78,7 @@ public class YamabikoClient : IAsyncDisposable
         _handshakeCts = new CancellationTokenSource();
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_handshakeCts.Token, ct);
 
-        _handshakeProcessor = new YamabikoClientHandshakeProcessor(this)
+        _handshakeProcessor = new YamabikoClientHandshakeProcessor(this, _transport)
         {
             Timeout = Timeout
         };

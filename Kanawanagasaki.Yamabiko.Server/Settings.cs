@@ -4,14 +4,14 @@ using Kanawanagasaki.Yamabiko.Dtls.Helpers;
 using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 
-public static class Settings
+public class Settings
 {
-    public static int Port { get; set; } = 9999;
-    public static int MTU { get; set; } = 1400;
-    public static string Domain { get; set; } = "example.com";
+    public int Port { get; set; } = 9999;
+    public int MTU { get; set; } = 1400;
+    public string Domain { get; set; } = "example.com";
 
-    private static X509Certificate2? _selfSignedCertificate;
-    public static X509Certificate2 SelfSignedCertificate
+    private X509Certificate2? _selfSignedCertificate;
+    public X509Certificate2 SelfSignedCertificate
     {
         get
         {
@@ -26,10 +26,10 @@ public static class Settings
         }
     }
 
-    public static string? CertificatePath { get; set; }
-    private static X509Certificate2? _certificate;
-    private static long _lastCertificateCheck = 0;
-    public static X509Certificate2 Certificate
+    public string? CertificatePath { get; set; }
+    private X509Certificate2? _certificate;
+    private long _lastCertificateCheck = 0;
+    public X509Certificate2 Certificate
     {
         get
         {
@@ -58,8 +58,8 @@ public static class Settings
         }
     }
 
-    public static int MaxClients { get; set; } = 1024;
-    public static int MaxClientsPerRemoteNetwork { get; set; } = 8;
+    public int MaxClients { get; set; } = 1024;
+    public int MaxClientsPerRemoteNetwork { get; set; } = 8;
 
-    public static int MaxInactivitySeconds { get; set; } = 90;
+    public int MaxInactivitySeconds { get; set; } = 90;
 }

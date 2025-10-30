@@ -68,7 +68,7 @@ public class ServerHandshakeProcessor : IDisposable
                 if (record.Type is not ERecordType.HANDSHAKE)
                     continue;
 
-                var handshakeFragment = HandshakeFragment.Parse(record.Buffer);
+                var handshakeFragment = HandshakeFragment.Parse(record.Buffer.Span);
                 foreach (var packet in ProcessFragment(handshakeFragment))
                     yield return packet;
             }

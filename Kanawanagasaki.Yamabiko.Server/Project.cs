@@ -1,5 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Server;
 
+using Kanawanagasaki.Yamabiko.Dtls.Helpers;
 using Kanawanagasaki.Yamabiko.Shared.Enums;
 using Kanawanagasaki.Yamabiko.Shared.Packets;
 using System.Collections.Concurrent;
@@ -76,15 +77,15 @@ public class Project
             switch (query.FilterOperation)
             {
                 case EFilterOperation.LESS:
-                    return CompareByteArrayLex(extra, query.Filter) < 0;
+                    return KeyHashHelper.CompareByteArrayLex(extra, query.Filter) < 0;
                 case EFilterOperation.LESS_OR_EQUALS:
-                    return CompareByteArrayLex(extra, query.Filter) <= 0;
+                    return KeyHashHelper.CompareByteArrayLex(extra, query.Filter) <= 0;
                 case EFilterOperation.EQUALS:
                     return Enumerable.SequenceEqual(query.Filter, extra);
                 case EFilterOperation.GREATER_OR_EQUALS:
-                    return 0 <= CompareByteArrayLex(extra, query.Filter);
+                    return 0 <= KeyHashHelper.CompareByteArrayLex(extra, query.Filter);
                 case EFilterOperation.GREATER:
-                    return 0 < CompareByteArrayLex(extra, query.Filter);
+                    return 0 < KeyHashHelper.CompareByteArrayLex(extra, query.Filter);
                 case EFilterOperation.CONTAINS:
                     {
                         if (extra.Length == 0 && query.Filter.Length == 0)

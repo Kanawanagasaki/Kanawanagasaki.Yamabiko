@@ -3,18 +3,18 @@
 using Kanawanagasaki.Yamabiko.Shared.Packets;
 using System.Collections.Concurrent;
 
-public static class ProjectsService
+public class ProjectsService
 {
-    private static readonly ConcurrentDictionary<Guid, Project> _projects = [];
-    private static readonly ConcurrentDictionary<Guid, Project> _peerIdToProject = [];
+    private readonly ConcurrentDictionary<Guid, Project> _projects = [];
+    private readonly ConcurrentDictionary<Guid, Project> _peerIdToProject = [];
 
-    public static Peer? GetPeer(Guid peerId)
+    public Peer? GetPeer(Guid peerId)
         => _peerIdToProject.GetValueOrDefault(peerId)?.GetPeer(peerId);
 
-    public static Project? GetProject(Guid projectId)
+    public Project? GetProject(Guid projectId)
         => _projects.GetValueOrDefault(projectId);
 
-    public static Peer ProcessAdvertisement(Client client, AdvertisePacket ad)
+    public Peer ProcessAdvertisement(Client client, AdvertisePacket ad)
     {
         if (_peerIdToProject.TryGetValue(client.PeerId, out var existingProject))
         {
@@ -30,20 +30,20 @@ public static class ProjectsService
         return project.ProcessAdvertisement(client, ad);
     }
 
-    public static Peer? ProcessAdvertisementExtra(Guid peerId, AdvertiseExtraPacket adExtra)
+    public Peer? ProcessAdvertisementExtra(Guid peerId, AdvertiseExtraPacket adExtra)
     {
         if (_peerIdToProject.TryGetValue(peerId, out var project) && project.ProjectId == adExtra.ProjectId)
             return project.ProcessAdvertisementExtra(peerId, adExtra);
         return null;
     }
 
-    public static void ProcessSubscribe(Client client, SubscribePacket subscribe)
+    public void ProcessSubscribe(Client client, SubscribePacket subscribe)
     {
         var project = _projects.GetOrAdd(subscribe.ProjectId, new Project(subscribe.ProjectId));
         project.Subscribe(client);
     }
 
-    public static void ProcessUnsubscribe(Guid peerId, UnsubscribePacket unsubscribe)
+    public void ProcessUnsubscribe(Guid peerId, UnsubscribePacket unsubscribe)
     {
         if (_projects.TryGetValue(unsubscribe.ProjectId, out var project))
         {
@@ -53,7 +53,7 @@ public static class ProjectsService
         }
     }
 
-    public static void RemovePeer(Guid peerId)
+    public void RemovePeer(Guid peerId)
     {
         if (_peerIdToProject.TryRemove(peerId, out var project))
         {

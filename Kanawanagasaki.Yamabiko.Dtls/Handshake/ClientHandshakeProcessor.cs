@@ -269,7 +269,7 @@ public abstract class ClientHandshakeProcessor : IDisposable
                     ProcessServerAck();
                 else if (record.Type is ERecordType.HANDSHAKE)
                 {
-                    var handshakeFragment = HandshakeFragment.Parse(record.Buffer);
+                    var handshakeFragment = HandshakeFragment.Parse(record.Buffer.Span);
                     ParseFragment(handshakeFragment);
                     await TryProcessNextHandshakeMessage(ct);
                 }

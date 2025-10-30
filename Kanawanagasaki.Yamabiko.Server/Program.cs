@@ -4,22 +4,24 @@ Console.WriteLine("-= Yamabiko =-");
 
 var parsedArgs = ParseArgs(args);
 
-if (GetSettingValue(parsedArgs, nameof(Settings.Domain)) is string domain)
-    Settings.Domain = domain;
-if (GetSettingValue(parsedArgs, nameof(Settings.Port)) is string portStr && int.TryParse(portStr, out var port))
-    Settings.Port = port;
-if (GetSettingValue(parsedArgs, nameof(Settings.MTU)) is string mtuStr && int.TryParse(mtuStr, out var mtu))
-    Settings.MTU = mtu;
-if (GetSettingValue(parsedArgs, nameof(Settings.CertificatePath)) is string certificatePath)
-    Settings.CertificatePath = certificatePath;
-if (GetSettingValue(parsedArgs, nameof(Settings.MaxClients)) is string maxClientsStr && int.TryParse(maxClientsStr, out var maxClients))
-    Settings.MaxClients = maxClients;
-if (GetSettingValue(parsedArgs, nameof(Settings.MaxClientsPerRemoteNetwork)) is string maxClientsPerRemoteNetworkStr && int.TryParse(maxClientsPerRemoteNetworkStr, out var maxClientsPerRemoteNetwork))
-    Settings.MaxClientsPerRemoteNetwork = maxClientsPerRemoteNetwork;
-if (GetSettingValue(parsedArgs, nameof(Settings.MaxInactivitySeconds)) is string maxInactivitySecondsStr && int.TryParse(maxInactivitySecondsStr, out var maxInactivitySeconds))
-    Settings.MaxInactivitySeconds = maxInactivitySeconds;
+var settings = new Settings();
 
-Console.WriteLine($"{Settings.Domain}:{Settings.Port}");
+if (GetSettingValue(parsedArgs, nameof(Settings.Domain)) is string domain)
+    settings.Domain = domain;
+if (GetSettingValue(parsedArgs, nameof(Settings.Port)) is string portStr && int.TryParse(portStr, out var port))
+    settings.Port = port;
+if (GetSettingValue(parsedArgs, nameof(Settings.MTU)) is string mtuStr && int.TryParse(mtuStr, out var mtu))
+    settings.MTU = mtu;
+if (GetSettingValue(parsedArgs, nameof(Settings.CertificatePath)) is string certificatePath)
+    settings.CertificatePath = certificatePath;
+if (GetSettingValue(parsedArgs, nameof(Settings.MaxClients)) is string maxClientsStr && int.TryParse(maxClientsStr, out var maxClients))
+    settings.MaxClients = maxClients;
+if (GetSettingValue(parsedArgs, nameof(Settings.MaxClientsPerRemoteNetwork)) is string maxClientsPerRemoteNetworkStr && int.TryParse(maxClientsPerRemoteNetworkStr, out var maxClientsPerRemoteNetwork))
+    settings.MaxClientsPerRemoteNetwork = maxClientsPerRemoteNetwork;
+if (GetSettingValue(parsedArgs, nameof(Settings.MaxInactivitySeconds)) is string maxInactivitySecondsStr && int.TryParse(maxInactivitySecondsStr, out var maxInactivitySeconds))
+    settings.MaxInactivitySeconds = maxInactivitySeconds;
+
+Console.WriteLine($"{settings.Domain}:{settings.Port}");
 
 var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (sender, e) =>
@@ -28,10 +30,17 @@ Console.CancelKeyPress += (sender, e) =>
     cts.Cancel();
 };
 
-var udpServiceTask = UdpService.RunAsync(cts.Token);
-var clientsClearTask = ClientsService.RunClearTimerAsync(cts.Token);
+var transport = new UdpTransport(settings);
 
-await Task.WhenAll(udpServiceTask, clientsClearTask);
+var projectsService = new ProjectsService();
+
+var clientsService = new ClientsService(settings, transport, projectsService);
+var clientsClearTask = clientsService.RunClearTimerAsync(cts.Token);
+
+var receiveService = new ReceiveService(clientsService, transport);
+var receiveServiceTask = receiveService.RunAsync(cts.Token);
+
+await Task.WhenAll(clientsClearTask, receiveServiceTask);
 
 static string? GetSettingValue(Dictionary<string, string> parsedArgs, string key)
 {
