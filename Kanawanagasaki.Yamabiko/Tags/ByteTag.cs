@@ -3,14 +3,17 @@
 public class ByteTag : ITag
 {
     public byte TagId { get; }
-    private byte _val { get; }
+    public byte Val { get; }
 
     public ByteTag(byte tagId, byte val)
     {
         TagId = tagId;
-        _val = val;
+        Val = val;
     }
 
     public byte[] ToByteArray()
-        => [_val];
+        => [Val];
+
+    public static ByteTag Parse(byte tagId, ReadOnlySpan<byte> buffer)
+        => new ByteTag(tagId, buffer[0]);
 }

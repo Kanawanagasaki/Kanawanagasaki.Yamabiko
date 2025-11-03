@@ -227,7 +227,7 @@ public class Client : IDisposable
             {
                 RequestId = Guid.Empty,
                 PeerId = PeerId,
-                Tag = adExtra.Tag,
+                TagId = adExtra.Tag,
                 Data = adExtra.Data,
             };
             foreach (var subscriber in project.GetSubscribers())
@@ -323,7 +323,7 @@ public class Client : IDisposable
             {
                 RequestId = queryExtra.RequestId,
                 PeerId = PeerId,
-                Tag = tag,
+                TagId = tag,
                 Data = peer.GetExtra(tag)
             });
         }
@@ -390,10 +390,9 @@ public class Client : IDisposable
         if (client is null)
             return;
 
-        var peerConnect = new PeerConnectPacket
+        var peerConnect = new DirectConnectPacket
         {
             ConnectionId = directConnect.ConnectionId,
-            PeerId = PeerId,
             PublicKey = directConnect.PublicKey,
             Ip = EndPoint.Address,
             Port = (ushort)EndPoint.Port
@@ -460,7 +459,7 @@ public class Client : IDisposable
 
         var record = new CipherTextRecord(ackBuffer)
         {
-            Type = ERecordType.ALERT,
+            Type = ERecordType.ACK,
             Epoch = 3,
             RecordNumber = _serverRecordCounter++
         };

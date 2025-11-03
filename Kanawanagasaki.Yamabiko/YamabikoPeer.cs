@@ -21,6 +21,7 @@ public class YamabikoPeer : IDisposable
     public TimeSpan PingInterval { get; set; } = TimeSpan.FromSeconds(3);
 
     public Guid ConnectionId { get; }
+    private byte[]? _connectionId;
 
     public Guid PeerId { get; }
 
@@ -230,10 +231,12 @@ public class YamabikoPeer : IDisposable
                 await _unreliableChannel.Writer.WriteAsync(record.Buffer[1..], ct);
                 break;
             case EPeerPacketType.RELIABLE:
-                await _reliableKcp.WriteAsync(record.Buffer[1..], ct);
+                await _reliableKcp.InputPacketAsync(record.Buffer[1..], ct);
                 break;
             case EPeerPacketType.STREAM:
-                await _reliableStream.WriteAsync(record.Buffer[1..], ct);
+                await _streamKcp.InputPacketAsync(record.Buffer[1..], ct);
+                break;
+            default:
                 break;
         }
     }
@@ -283,6 +286,21 @@ public class YamabikoPeer : IDisposable
         await EncryptAndSendBufferAsync(EPeerPacketType.PING, Array.Empty<byte>(), ct);
     }
 
+    public Task SendUnreliableAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+        => EncryptAndSendBufferAsync(EPeerPacketType.UNRELIABLE, buffer, ct);
+
+    public async Task<ReadOnlyMemory<byte>> ReceiveUnreliableAsync(CancellationToken ct = default)
+        => await _unreliableChannel.Reader.ReadAsync(ct);
+
+    public Task SendReliableAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+        => _reliableKcp.WriteAsync(buffer, ct);
+
+    public Task<ReadOnlyMemory<byte>> ReceiveReliableAsync(CancellationToken ct = default)
+        => _reliableKcp.ReadAsync(ct);
+
+    public Stream GetStream()
+        => _reliableStream;
+
     public async Task EncryptAndSendBufferAsync(EPeerPacketType packetType, ReadOnlyMemory<byte> buffer, CancellationToken ct)
     {
         if (RemoteEndpoint is null)
@@ -293,6 +311,12 @@ public class YamabikoPeer : IDisposable
         var rentedBuffer = ArrayPool<byte>.Shared.Rent(1 + buffer.Length);
         try
         {
+            if (_connectionId is null)
+            {
+                _connectionId = new byte[16];
+                ConnectionId.TryWriteBytes(_connectionId, true, out _);
+            }
+
             var bufferWithType = rentedBuffer.AsMemory(0, 1 + buffer.Length);
             bufferWithType.Span[0] = (byte)packetType;
             buffer.CopyTo(bufferWithType[1..]);
@@ -301,20 +325,13 @@ public class YamabikoPeer : IDisposable
                 Type = ERecordType.APPLICATION_DATA,
                 Epoch = 3,
                 RecordNumber = Interlocked.Increment(ref _recordNumberCounter),
+                ConnectionId = _connectionId
             };
 
             var recordLength = record.Length(true, false);
-            var recordRentedBuffer = ArrayPool<byte>.Shared.Rent(recordLength);
-            try
-            {
-                var recordBuffer = recordRentedBuffer.AsMemory(0, recordLength);
-                record.EncryptAndWrite(recordBuffer.Span, _localAes, _localAesIV, _localAesHeader, true, false);
-                await _transport.SendAsync(RemoteEndpoint, recordBuffer, ct);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(recordRentedBuffer);
-            }
+            var recordBuffer = new byte[recordLength];
+            record.EncryptAndWrite(recordBuffer, _localAes, _localAesIV, _localAesHeader, true, false);
+            await _transport.SendAsync(RemoteEndpoint, recordBuffer, ct);
         }
         finally
         {
@@ -340,15 +357,6 @@ public class YamabikoPeer : IDisposable
             linkedCts.Cancel();
         }
     }
-
-    public async Task<ReadOnlyMemory<byte>> ReceiveUnreliableAsync(CancellationToken ct = default)
-        => await _unreliableChannel.Reader.ReadAsync(ct);
-
-    public async Task<ReadOnlyMemory<byte>> ReceiveReliableAsync(CancellationToken ct = default)
-        => await _reliableKcp.ReadAsync(ct);
-
-    public Stream GetStream()
-        => _reliableStream;
 
     public void Disconnect()
     {

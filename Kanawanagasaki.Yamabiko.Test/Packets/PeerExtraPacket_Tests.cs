@@ -10,7 +10,7 @@ public class PeerExtraPacket_Tests
         {
             RequestId = Guid.NewGuid(),
             PeerId = Guid.NewGuid(),
-            Tag = (byte)Random.Shared.Next(0, 256),
+            TagId = (byte)Random.Shared.Next(0, 256),
             Data = RandomNumberGenerator.GetBytes(255)
         };
 
@@ -26,7 +26,7 @@ public class PeerExtraPacket_Tests
 
         Assert.Equal(packet.RequestId, parsed.RequestId);
         Assert.Equal(packet.PeerId, parsed.PeerId);
-        Assert.Equal(packet.Tag, parsed.Tag);
+        Assert.Equal(packet.TagId, parsed.TagId);
         Assert.Equal(packet.Data, parsed.Data);
     }
 

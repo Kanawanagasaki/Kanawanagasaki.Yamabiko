@@ -33,6 +33,11 @@ public class KcpTransport : IKcpTransport, IDisposable
         await _peer.EncryptAndSendBufferAsync(_isStreamMode ? EPeerPacketType.STREAM : EPeerPacketType.RELIABLE, packet, ct);
     }
 
+    public async Task InputPacketAsync(ReadOnlyMemory<byte> packet, CancellationToken ct)
+    {
+        await Conversation.InputPakcetAsync(packet, ct);
+    }
+
     public async Task WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct)
     {
         await _semaphore.WaitAsync(ct);

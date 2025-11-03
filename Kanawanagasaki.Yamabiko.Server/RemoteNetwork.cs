@@ -64,7 +64,11 @@ public class RemoteNetwork
         _clients.Clear();
         foreach (var (endpoint, client) in clients)
         {
-            await client.SendAlertBufferAsync(EAlertType.CLOSE_NOTIFY, ct);
+            try
+            {
+                await client.SendAlertBufferAsync(EAlertType.CLOSE_NOTIFY, ct);
+            }
+            catch { }
             _clientsService.RemoveClient(endpoint);
         }
     }

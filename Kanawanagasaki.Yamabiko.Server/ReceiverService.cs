@@ -1,10 +1,10 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Server;
-public class ReceiveService
+public class ReceiverService
 {
     private readonly ClientsService _clientsService;
     private readonly ITransport _transport;
 
-    public ReceiveService(ClientsService clientsService, ITransport transport)
+    public ReceiverService(ClientsService clientsService, ITransport transport)
     {
         _clientsService = clientsService;        _transport = transport;
     }

@@ -6,13 +6,13 @@ using System.Threading.Channels;
 
 public class QueryResult
 {
-    public IReadOnlyDictionary<Guid, QueryPeerResult> Peers => _peers.AsReadOnly();
+    public IReadOnlyDictionary<Guid, PeerInfo> Peers => _peers.AsReadOnly();
 
     public Guid RequestId { get; }
     public int Skip { get; }
     public int Count { get; private set; }
     public int Total { get; private set; }
-    private readonly ConcurrentDictionary<Guid, QueryPeerResult> _peers;
+    private readonly ConcurrentDictionary<Guid, PeerInfo> _peers;
 
     private readonly Channel<Packet> _channel;
 
@@ -68,7 +68,7 @@ public class QueryResult
 
     public void ProcessPeerPacket(PeerPacket peer)
     {
-        var queryPeer = new QueryPeerResult(peer);
+        var queryPeer = new PeerInfo(peer);
         _peers.AddOrUpdate(peer.PeerId, queryPeer, (_, existing) =>
         {
             var newTags = peer.ExtraTags.Order();
@@ -91,9 +91,9 @@ public class QueryResult
         if (_peers.TryGetValue(peerExtra.PeerId, out var queryPeer))
         {
             if(peerExtra.Data is null)
-                queryPeer.ClearTag(peerExtra.Tag);
+                queryPeer.ClearTag(peerExtra.TagId);
             else
-                queryPeer.SetTag(peerExtra.Tag, peerExtra.Data);
+                queryPeer.SetTag(peerExtra.TagId, peerExtra.Data);
         }
 
         _channel.Writer.TryWrite(peerExtra);

@@ -47,7 +47,7 @@ public abstract class YamabikoTransport : IAsyncDisposable
                 var connectionIdBytes = CipherTextRecord.ReadConnectionId(result.Buffer.Span, 16, 0);
                 if (connectionIdBytes.Length == 16)
                 {
-                    var connectionId = new Guid(connectionIdBytes);
+                    var connectionId = new Guid(connectionIdBytes, true);
                     _connectionIdActivityTimestamps.AddOrUpdate(connectionId, now, (_, _) => now);
                     var channel = _connectionIdChannels.GetOrAdd(connectionId, _ => Channel.CreateBounded<ReadOnlyMemory<byte>>(_boundedChannelOptions));
                     await channel.Writer.WriteAsync(result.Buffer);

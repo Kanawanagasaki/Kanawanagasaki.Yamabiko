@@ -16,7 +16,8 @@ public class Peer
 
     public ulong Flags { get; set; } = 0;
 
-    private ConcurrentDictionary<byte, byte[]> _extra = [];
+    private ConcurrentDictionary<byte, byte[]> _tags = [];
+    public IReadOnlyDictionary<byte, byte[]> Tags => _tags.AsReadOnly();
 
     public Peer(Project project, Client client)
     {
@@ -25,13 +26,13 @@ public class Peer
     }
 
     public void AddExtra(byte tag, byte[] data)
-        => _extra.AddOrUpdate(tag, data, (_, _) => data);
+        => _tags.AddOrUpdate(tag, data, (_, _) => data);
 
     public byte[]? GetExtra(byte tag)
-        => _extra.GetValueOrDefault(tag);
+        => _tags.GetValueOrDefault(tag);
 
     public void RemoveExtra(byte tag)
-        => _extra.TryRemove(tag, out _);
+        => _tags.TryRemove(tag, out _);
 
     public PeerPacket ToPacket(Guid requestId, int index, int total)
         => new PeerPacket
@@ -40,7 +41,7 @@ public class Peer
             PeerId = Client.PeerId,
             Name = Name,
             Flags = Flags,
-            ExtraTags = _extra.Keys.ToArray(),
+            ExtraTags = _tags.Keys.ToArray(),
             ProtectionLevel = Password is null ? EProtectionLevel.PUBLIC : EProtectionLevel.PASSWORD_PROTECTED,
             RequestId = requestId,
             Index = index,

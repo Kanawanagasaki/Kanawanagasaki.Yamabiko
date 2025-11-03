@@ -37,10 +37,12 @@ var projectsService = new ProjectsService();
 var clientsService = new ClientsService(settings, transport, projectsService);
 var clientsClearTask = clientsService.RunClearTimerAsync(cts.Token);
 
-var receiveService = new ReceiveService(clientsService, transport);
+var receiveService = new ReceiverService(clientsService, transport);
 var receiveServiceTask = receiveService.RunAsync(cts.Token);
 
 await Task.WhenAll(clientsClearTask, receiveServiceTask);
+
+transport.Dispose();
 
 static string? GetSettingValue(Dictionary<string, string> parsedArgs, string key)
 {

@@ -10,16 +10,23 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 public class YamabikoClient : IAsyncDisposable
 {
     public delegate Task<PeerConnectResult> AcceptPeerDelegate(PeerConnectPacket peerConnect, CancellationToken ct);
-    public required AcceptPeerDelegate AcceptPeerCallback { get; init; }
 
-    public event Action<YamabikoPeer>? OnPeerConnection;
+    public delegate bool ValidateCertificatesDelegate(X509Certificate2[] certificates, string domain);
+    public ValidateCertificatesDelegate? ValidateCertificatesCallback { get; init; }
+
+    public delegate void PeerAdvertisementDelegate(PeerPacket peerPacket);
+    public event PeerAdvertisementDelegate? OnPeerAdvertisement;
+
+    public delegate void PeerExtraAdvertisementDelegate(PeerExtraPacket peerExtraPacket);
+    public event PeerExtraAdvertisementDelegate? OnPeerExtraAdvertisement;
 
     public Guid ProjectId { get; }
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(90);
@@ -55,13 +62,9 @@ public class YamabikoClient : IAsyncDisposable
     private ConcurrentDictionary<Guid, QueryResult> _queries = [];
     private ConcurrentDictionary<Guid, YamabikoPeer> _peers = [];
 
-    public YamabikoClient(IPEndPoint serverEndpoint, Guid projectId)
-    {
-        ServerEndPoint = serverEndpoint;
-        ProjectId = projectId;
+    private Channel<(PeerConnectPacket peerConnect, long timestamp)> _peersToAccept;
 
-        _transport = new UdpYamabikoTransport();
-    }
+    public YamabikoClient(IPEndPoint serverEndpoint, Guid projectId) : this(serverEndpoint, projectId, new UdpYamabikoTransport()) { }
 
     public YamabikoClient(IPEndPoint serverEndpoint, Guid projectId, YamabikoTransport transport)
     {
@@ -69,6 +72,11 @@ public class YamabikoClient : IAsyncDisposable
         ProjectId = projectId;
 
         _transport = transport;
+
+        _peersToAccept = Channel.CreateBounded<(PeerConnectPacket peerConnect, long timestamp)>(new BoundedChannelOptions(16)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest
+        });
     }
 
     public async Task StartAsync(CancellationToken ct = default)
@@ -78,7 +86,7 @@ public class YamabikoClient : IAsyncDisposable
         _handshakeCts = new CancellationTokenSource();
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_handshakeCts.Token, ct);
 
-        _handshakeProcessor = new YamabikoClientHandshakeProcessor(this, _transport)
+        _handshakeProcessor = new YamabikoClientHandshakeProcessor(this, _transport, ValidateCertificatesCallback)
         {
             Timeout = Timeout
         };
@@ -126,6 +134,10 @@ public class YamabikoClient : IAsyncDisposable
             _receiveCts = new CancellationTokenSource();
             _receiveTask = ReceiveLoopAsync();
         }
+        else
+        {
+            throw new DisconnectedException("Handshake with server failed");
+        }
     }
 
     private async Task PingLoopAsync()
@@ -141,7 +153,7 @@ public class YamabikoClient : IAsyncDisposable
 
             if (Timeout < Stopwatch.GetElapsedTime(_serverLastActivity))
             {
-                Stop();
+                await StopAsync();
                 throw new DisconnectedException("Server timeout");
             }
         }
@@ -199,7 +211,7 @@ public class YamabikoClient : IAsyncDisposable
             else if (record.Type is ERecordType.ACK)
             {
                 var ack = Ack.Parse(record.Buffer.Span);
-                if (_acknowledgeableRecords.TryRemove(record.RecordNumber, out var ackRecord))
+                if (_acknowledgeableRecords.TryRemove(ack.RecordNumber, out var ackRecord))
                     ackRecord.Acknowledge(ack);
             }
 
@@ -219,6 +231,11 @@ public class YamabikoClient : IAsyncDisposable
         var packet = Packet.Parse(record.Buffer.Span);
         switch (packet)
         {
+            case PongPacket pong:
+                {
+                    _serverLastActivity = Stopwatch.GetTimestamp();
+                    break;
+                }
             case EmptyQueryResultPacket emptyQueryResult:
                 {
                     if (_queries.TryGetValue(emptyQueryResult.RequestId, out var queryResult))
@@ -235,12 +252,16 @@ public class YamabikoClient : IAsyncDisposable
                 {
                     if (_queries.TryGetValue(peer.RequestId, out var queryResult))
                         queryResult.ProcessPeerPacket(peer);
+                    else if (peer.RequestId == Guid.Empty)
+                        OnPeerAdvertisement?.Invoke(peer);
                     break;
                 }
             case PeerExtraPacket peerExtra:
                 {
                     if (_queries.TryGetValue(peerExtra.RequestId, out var queryResult))
                         queryResult.ProcessPeerExtraPacket(peerExtra);
+                    else if (peerExtra.RequestId == Guid.Empty)
+                        OnPeerExtraAdvertisement?.Invoke(peerExtra);
                     break;
                 }
             case ConnectDenyPacket connectDeny:
@@ -251,43 +272,7 @@ public class YamabikoClient : IAsyncDisposable
                 }
             case PeerConnectPacket peerConnect:
                 {
-                    var acceptResult = await AcceptPeerCallback(peerConnect, ct);
-                    if (acceptResult.IsAccepted)
-                    {
-                        var peer = _peers.AddOrUpdate
-                        (
-                            peerConnect.ConnectionId,
-                            connectionId =>
-                            {
-                                var peer = new YamabikoPeer(_transport, connectionId, peerConnect.PeerId)
-                                {
-                                    Timeout = Timeout,
-                                    ResendInterval = ResendInterval,
-                                    PingInterval = PingInterval
-                                };
-                                peer.ProcessPeerConnect(peerConnect);
-                                Task.Run(() => DirectConnectAsync(peer, ct));
-                                OnPeerConnection?.Invoke(peer);
-                                return peer;
-                            },
-                            (_, peer) =>
-                            {
-                                peer.ProcessPeerConnect(peerConnect);
-                                return peer;
-                            }
-                        );
-                        await peer.PingAsync(ct);
-                    }
-                    else
-                    {
-                        var connectDeny = new ConnectDenyPacket
-                        {
-                            ConnectionId = peerConnect.ConnectionId,
-                            PeerId = peerConnect.PeerId,
-                            Reason = acceptResult.Reason
-                        };
-                        await SendPacketsAsync([connectDeny], false, ct);
-                    }
+                    await _peersToAccept.Writer.WriteAsync((peerConnect, Stopwatch.GetTimestamp()), ct);
                     break;
                 }
             case DirectConnectPacket directConnect:
@@ -389,7 +374,7 @@ public class YamabikoClient : IAsyncDisposable
         await SendPacketsAsync([new StopAdvertisingPacket()], true, ct);
     }
 
-    public async Task Subscribe(CancellationToken ct = default)
+    public async Task SubscribeAsync(CancellationToken ct = default)
     {
         if (_clientAes is null || _clientIV is null || _clientRecordNumberAes is null)
             throw new DisconnectedException("Not connected to rendezvous server");
@@ -397,7 +382,7 @@ public class YamabikoClient : IAsyncDisposable
         await SendPacketsAsync([new SubscribePacket { ProjectId = ProjectId }], true, ct);
     }
 
-    public async Task Unsubscribe(CancellationToken ct = default)
+    public async Task UnsubscribeAsync(CancellationToken ct = default)
     {
         if (_clientAes is null || _clientIV is null || _clientRecordNumberAes is null)
             throw new DisconnectedException("Not connected to rendezvous server");
@@ -492,7 +477,7 @@ public class YamabikoClient : IAsyncDisposable
         return queryRes;
     }
 
-    public async Task<YamabikoPeer> ConnectAsync(QueryPeerResult queryPeer, string? password = null, byte[]? extra = null, CancellationToken ct = default)
+    public async Task<YamabikoPeer> ConnectAsync(PeerInfo queryPeer, string? password = null, byte[]? extra = null, CancellationToken ct = default)
     {
         if (_clientAes is null || _clientIV is null || _clientRecordNumberAes is null)
             throw new DisconnectedException("Not connected to rendezvous server");
@@ -689,6 +674,61 @@ public class YamabikoClient : IAsyncDisposable
     {
         await SendAlertAsync(EAlertType.CLOSE_NOTIFY, default);
         Stop();
+    }
+
+    public Task<YamabikoPeer?> AcceptPeerAsync(CancellationToken ct = default)
+        => AcceptPeerAsync((_, _) => Task.FromResult(PeerConnectResult.Accept()), ct);
+
+    public async Task<YamabikoPeer?> AcceptPeerAsync(AcceptPeerDelegate acceptPeerCallback, CancellationToken ct = default)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var (peerConnect, timestamp) = await _peersToAccept.Reader.ReadAsync(ct);
+
+            if (Timeout < Stopwatch.GetElapsedTime(timestamp))
+                continue;
+
+            var acceptResult = await acceptPeerCallback(peerConnect, ct);
+
+            if (!acceptResult.IsAccepted)
+            {
+                var connectDeny = new ConnectDenyPacket
+                {
+                    ConnectionId = peerConnect.ConnectionId,
+                    PeerId = peerConnect.PeerId,
+                    Reason = acceptResult.Reason
+                };
+                await SendPacketsAsync([connectDeny], false, ct);
+                continue;
+            }
+
+            var peer = _peers.AddOrUpdate
+            (
+                peerConnect.ConnectionId,
+                connectionId =>
+                {
+                    var peer = new YamabikoPeer(_transport, connectionId, peerConnect.PeerId)
+                    {
+                        Timeout = Timeout,
+                        ResendInterval = ResendInterval,
+                        PingInterval = PingInterval
+                    };
+                    peer.ProcessPeerConnect(peerConnect);
+                    Task.Run(() => DirectConnectAsync(peer, ct));
+                    return peer;
+                },
+                (_, peer) =>
+                {
+                    peer.ProcessPeerConnect(peerConnect);
+                    return peer;
+                }
+            );
+            await peer.PingAsync(ct);
+
+            return peer;
+        }
+
+        return null;
     }
 
     private void Stop()

@@ -1,8 +1,9 @@
 ﻿namespace Kanawanagasaki.Yamabiko;
 
 using Kanawanagasaki.Yamabiko.Shared.Packets;
+using Kanawanagasaki.Yamabiko.Tags;
 
-public class QueryPeerResult
+public class PeerInfo
 {
     public Guid PeerId { get; }
     public Guid ProjectId { get; }
@@ -16,7 +17,7 @@ public class QueryPeerResult
     private HashSet<byte> _missingTags;
     public IReadOnlySet<byte> MissingTags => _missingTags;
 
-    public QueryPeerResult(PeerPacket peer)
+    public PeerInfo(PeerPacket peer)
     {
         PeerId = peer.PeerId;
         ProjectId = peer.ProjectId;
@@ -24,7 +25,7 @@ public class QueryPeerResult
         Flags = peer.Flags;
         Index = peer.Index;
 
-        _missingTags = new HashSet<byte>(peer.ExtraTags);
+        _missingTags = [.. peer.ExtraTags];
     }
 
     public void SetTag(byte tagId, byte[] tag)
@@ -37,5 +38,13 @@ public class QueryPeerResult
     {
         _tags.Remove(tagId);
         _missingTags.Remove(tagId);
+    }
+
+    public T? GetTag<T>(byte tagId) where T : class, ITag
+    {
+        if (!_tags.TryGetValue(tagId, out var tagBytes))
+            return null;
+
+        return ITag.Parse<T>(tagId, tagBytes);
     }
 }

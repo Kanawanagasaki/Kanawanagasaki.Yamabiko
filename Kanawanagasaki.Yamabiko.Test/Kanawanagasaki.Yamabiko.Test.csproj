@@ -16,7 +16,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Kanawanagasaki.Yamabiko.Dtls\Kanawanagasaki.Yamabiko.Dtls.csproj" />
+    <ProjectReference Include="..\Kanawanagasaki.Yamabiko.Server\Kanawanagasaki.Yamabiko.Server.csproj" />
     <ProjectReference Include="..\Kanawanagasaki.Yamabiko.Shared\Kanawanagasaki.Yamabiko.Shared.csproj" />
+    <ProjectReference Include="..\Kanawanagasaki.Yamabiko\Kanawanagasaki.Yamabiko.csproj" />
   </ItemGroup>
 
   <ItemGroup>

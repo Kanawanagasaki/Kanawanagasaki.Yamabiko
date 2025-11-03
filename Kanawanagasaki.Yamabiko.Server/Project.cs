@@ -11,6 +11,9 @@ public class Project
     private readonly ConcurrentDictionary<Guid, Peer> _peers = [];
     private readonly ConcurrentDictionary<Guid, Client> _subsribers = [];
 
+    public IEnumerable<Peer> Peers => _peers.Values;
+    public IEnumerable<Client> Subscribers => _subsribers.Values;
+
     public int Count => _peers.Count;
     public int SubscribersCount => _subsribers.Count;
 

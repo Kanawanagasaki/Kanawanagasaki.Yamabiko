@@ -11,6 +11,8 @@ public class ClientsService
     private readonly ConcurrentDictionary<Guid, Client> _clients = new();
     private readonly ConcurrentDictionary<IPAddress, RemoteNetwork> _remoteNetworks = new();
 
+    public IEnumerable<Client> Clients => _clients.Values;
+
     private readonly Settings _settings;
     private readonly ITransport _transport;
     private readonly ProjectsService _projectsService;
@@ -52,7 +54,7 @@ public class ClientsService
                 var recordBuffer = new byte[record.Length()];
                 record.Write(recordBuffer);
 
-                await _transport.SendAsync(endpoint, buffer, ct);
+                await _transport.SendAsync(endpoint, recordBuffer, ct);
                 return;
             }
             else if (!network.TryAddClient(endpoint, out client))
@@ -70,7 +72,7 @@ public class ClientsService
                 var recordBuffer = new byte[record.Length()];
                 record.Write(recordBuffer);
 
-                await _transport.SendAsync(endpoint, buffer, ct);
+                await _transport.SendAsync(endpoint, recordBuffer, ct);
                 return;
             }
 
@@ -103,32 +105,36 @@ public class ClientsService
     public async Task RunClearTimerAsync(CancellationToken ct)
     {
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(_settings.MaxInactivitySeconds / 2d));
-        while (await timer.WaitForNextTickAsync(ct) && !ct.IsCancellationRequested)
+        try
         {
-            try
+            while (await timer.WaitForNextTickAsync(ct) && !ct.IsCancellationRequested)
             {
-                foreach (var network in _remoteNetworks.Values)
+                try
                 {
-                    await network.ClearInactiveClientsAsync(ct);
+                    foreach (var network in _remoteNetworks.Values)
+                    {
+                        await network.ClearInactiveClientsAsync(ct);
 
-                    if (network.Count == 0)
-                        _remoteNetworks.TryRemove(network.RemoteIP, out _);
+                        if (network.Count == 0)
+                            _remoteNetworks.TryRemove(network.RemoteIP, out _);
+                    }
+
+                    await timer.WaitForNextTickAsync(ct);
+
+                    foreach (var client in _clients.Values)
+                    {
+                        if (_settings.MaxInactivitySeconds < Stopwatch.GetElapsedTime(client.LastActivity).TotalSeconds)
+                            RemoveClient(client.EndPoint);
+                    }
                 }
-
-                await timer.WaitForNextTickAsync(ct);
-
-                foreach (var client in _clients.Values)
+                catch (OperationCanceledException) { }
+                catch (Exception e)
                 {
-                    if (_settings.MaxInactivitySeconds < Stopwatch.GetElapsedTime(client.LastActivity).TotalSeconds)
-                        RemoveClient(client.EndPoint);
+                    Console.Error.WriteLine(e.Message);
                 }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine(e.Message);
             }
         }
+        catch (OperationCanceledException) { }
     }
 
     public async Task ClearAllClients(CancellationToken ct)

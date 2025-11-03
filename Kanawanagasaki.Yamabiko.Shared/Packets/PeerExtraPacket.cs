@@ -13,7 +13,7 @@ public class PeerExtraPacket : Packet
 
     public required Guid PeerId { get; init; }
 
-    public required byte Tag { get; init; }
+    public required byte TagId { get; init; }
 
     private byte[]? _data;
     public required byte[]? Data
@@ -50,7 +50,7 @@ public class PeerExtraPacket : Packet
 
         BinaryHelper.Write(PeerId, buffer, ref offset);
 
-        buffer[offset++] = Tag;
+        buffer[offset++] = TagId;
 
         BinaryHelper.Write(Data, buffer, ref offset);
     }
@@ -73,7 +73,7 @@ public class PeerExtraPacket : Packet
             {
                 RequestId = requestId,
                 PeerId = peerId,
-                Tag = tag,
+                TagId = tag,
                 Data = data
             };
         }
