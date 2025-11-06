@@ -2,15 +2,15 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public class ServerCertificateHandshake : IHandshake
+internal class ServerCertificateHandshake : IHandshake
 {
-    public const EHandshakeType TYPE = EHandshakeType.CERTIFICATE;
+    internal const EHandshakeType TYPE = EHandshakeType.CERTIFICATE;
     public EHandshakeType Type => TYPE;
 
-    public byte[] RequestContext { get; }
-    public CertificateBuffer[] Certificates { get; }
+    internal byte[] RequestContext { get; }
+    internal CertificateBuffer[] Certificates { get; }
 
-    public ServerCertificateHandshake(CertificateBuffer[] certificates, byte[] requestContext)
+    internal ServerCertificateHandshake(CertificateBuffer[] certificates, byte[] requestContext)
     {
         if (byte.MaxValue < requestContext.Length)
             throw new ArgumentException($"Request Context length exceeds {byte.MaxValue} bytes");
@@ -19,7 +19,7 @@ public class ServerCertificateHandshake : IHandshake
         Certificates = certificates;
     }
 
-    public ServerCertificateHandshake(CertificateBuffer[] certificates)
+    internal ServerCertificateHandshake(CertificateBuffer[] certificates)
     {
         RequestContext = Array.Empty<byte>();
         Certificates = certificates;
@@ -57,7 +57,7 @@ public class ServerCertificateHandshake : IHandshake
         }
     }
 
-    public static ServerCertificateHandshake Parse(Span<byte> buffer)
+    internal static ServerCertificateHandshake Parse(Span<byte> buffer)
     {
         int offset = 0;
 

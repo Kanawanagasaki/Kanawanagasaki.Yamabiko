@@ -2,9 +2,9 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public class EncryptThenMacExtension : IExtension
+internal class EncryptThenMacExtension : IExtension
 {
-    public const EExtensionType TYPE = EExtensionType.ENCRYPT_THEN_MAC;
+    internal const EExtensionType TYPE = EExtensionType.ENCRYPT_THEN_MAC;
     public EExtensionType Type => TYPE;
 
     public int Length(bool isRequest)
@@ -12,6 +12,6 @@ public class EncryptThenMacExtension : IExtension
 
     public void Write(Span<byte> buffer, bool isRequest) { }
 
-    public static EncryptThenMacExtension Parse(Span<byte> buffer, bool isRequest)
+    internal static EncryptThenMacExtension Parse(Span<byte> buffer, bool isRequest)
         => new EncryptThenMacExtension();
 }

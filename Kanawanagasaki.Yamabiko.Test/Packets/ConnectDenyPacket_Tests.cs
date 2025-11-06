@@ -2,13 +2,14 @@
 
 using Kanawanagasaki.Yamabiko.Shared.Packets;
 using System;
+using System.Security.Cryptography;
 
 public class ConnectDenyPacket_Tests
 {
     private static ConnectDenyPacket CreateRandomConnectDenyPacket()
         => new ConnectDenyPacket
         {
-            ConnectionId = Guid.NewGuid(),
+            ConnectionId = BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)),
             PeerId = Guid.NewGuid(),
             Reason = Random.Shared.NextDouble() < 0.5 ? null : RandomAsciiString(Random.Shared.Next(0, 200))
         };

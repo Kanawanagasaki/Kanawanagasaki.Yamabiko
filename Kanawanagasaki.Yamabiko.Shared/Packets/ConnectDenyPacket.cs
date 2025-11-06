@@ -9,7 +9,7 @@ public class ConnectDenyPacket : Packet
     public const EPacketType TYPE = EPacketType.CONNECT_DENY;
     public override EPacketType Type => TYPE;
 
-    public required Guid ConnectionId { get; init; }
+    public required uint ConnectionId { get; init; }
 
     public required Guid PeerId { get; init; }
 
@@ -55,7 +55,7 @@ public class ConnectDenyPacket : Packet
         {
             int offset = 0;
 
-            var connectionId = BinaryHelper.ReadGuid(buffer, ref offset);
+            var connectionId = BinaryHelper.ReadUInt32(buffer, ref offset);
 
             var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
 

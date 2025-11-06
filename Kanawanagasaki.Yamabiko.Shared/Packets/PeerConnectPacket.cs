@@ -12,7 +12,7 @@ public class PeerConnectPacket : Packet
 
     public required Guid PeerId { get; init; }
 
-    public required Guid ConnectionId { get; init; }
+    public required uint ConnectionId { get; init; }
 
     private byte[] _publicKey = Array.Empty<byte>();
     public required byte[] PublicKey
@@ -75,7 +75,7 @@ public class PeerConnectPacket : Packet
 
             var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
 
-            var connectionId = BinaryHelper.ReadGuid(buffer, ref offset);
+            var connectionId = BinaryHelper.ReadUInt32(buffer, ref offset);
 
             var publicKey = BinaryHelper.ReadByteArray(buffer, ref offset);
 

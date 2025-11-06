@@ -2,12 +2,12 @@
 
 using System.Security.Cryptography.X509Certificates;
 
-public class CertificateBuffer
+internal class CertificateBuffer
 {
-    public byte[] Certificate { get; }
-    public byte[] Extensions { get; }
+    internal byte[] Certificate { get; }
+    internal byte[] Extensions { get; }
 
-    public CertificateBuffer(byte[] certificate)
+    internal CertificateBuffer(byte[] certificate)
     {
         if (0xFFFFFF < certificate.Length)
             throw new ArgumentException($"Certificate length exceeds {0xFFFFFF} bytes");
@@ -16,7 +16,7 @@ public class CertificateBuffer
         Extensions = Array.Empty<byte>();
     }
 
-    public CertificateBuffer(byte[] certificate, byte[] extensions)
+    internal CertificateBuffer(byte[] certificate, byte[] extensions)
     {
         if (0xFFFFFF < certificate.Length)
             throw new ArgumentException($"Certificate length exceeds {0xFFFFFF} bytes");
@@ -27,13 +27,13 @@ public class CertificateBuffer
         Extensions = extensions;
     }
 
-    public CertificateBuffer(X509Certificate2 certificate)
+    internal CertificateBuffer(X509Certificate2 certificate)
     {
         Certificate = certificate.Export(X509ContentType.Cert);
         Extensions = Array.Empty<byte>();
     }
 
-    public CertificateBuffer(X509Certificate2 certificate, byte[] extensions)
+    internal CertificateBuffer(X509Certificate2 certificate, byte[] extensions)
     {
         if (ushort.MaxValue < extensions.Length)
             throw new ArgumentException($"Extensions length exceeds {ushort.MaxValue} bytes");
@@ -65,6 +65,6 @@ public class CertificateBuffer
         Extensions.CopyTo(buffer.Slice(offset, Extensions.Length));
     }
 
-    public X509Certificate2 ToX509Certificate2()
+    internal X509Certificate2 ToX509Certificate2()
         => X509CertificateLoader.LoadCertificate(Certificate);
 }

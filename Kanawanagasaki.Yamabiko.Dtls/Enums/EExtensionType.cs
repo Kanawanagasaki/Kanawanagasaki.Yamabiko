@@ -1,6 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public enum EExtensionType : ushort
+internal enum EExtensionType : ushort
 {
     UNKNOWN = 0x0000,
     SUPPORTED_GROUPS = 0x000A,

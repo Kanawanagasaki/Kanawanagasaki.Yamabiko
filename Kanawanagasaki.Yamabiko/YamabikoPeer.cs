@@ -4,15 +4,15 @@ using Kanawanagasaki.Yamabiko.Dtls;
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 using Kanawanagasaki.Yamabiko.Dtls.Helpers;
 using Kanawanagasaki.Yamabiko.Exceptions;
+using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using Kanawanagasaki.Yamabiko.Shared.Packets;
-using KcpSharp;
 using System.Buffers;
 using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading.Channels;
 
-public class YamabikoPeer : IDisposable
+public class YamabikoPeer : IAsyncDisposable, IDisposable
 {
     public event Action<Exception>? OnError;
 
@@ -20,10 +20,10 @@ public class YamabikoPeer : IDisposable
     public TimeSpan ResendInterval { get; set; } = TimeSpan.FromSeconds(1);
     public TimeSpan PingInterval { get; set; } = TimeSpan.FromSeconds(3);
 
-    public Guid ConnectionId { get; }
+    public uint ConnectionId { get; }
     private byte[]? _connectionId;
 
-    public Guid PeerId { get; }
+    public Guid RemotePeerId { get; }
 
     public IPEndPoint? RemoteEndpoint { get; private set; }
     public TimeSpan Ping { get; private set; } = TimeSpan.FromTicks(-1);
@@ -31,7 +31,7 @@ public class YamabikoPeer : IDisposable
     private long[] _pingReceiveTimestamps = new long[5];
 
     private readonly byte[] _privateKey;
-    public byte[] PublicKey { get; }
+    internal byte[] PublicKey { get; }
 
     private YamabikoTransport _transport;
 
@@ -47,24 +47,23 @@ public class YamabikoPeer : IDisposable
     public string? DenyReason { get; private set; }
 
     private readonly CancellationTokenSource _cts = new();
-    private readonly TaskCompletionSource _tcs = new();
+    private readonly TaskCompletionSource _connectedTcs = new();
 
     private ulong _lastPeerRecordNumber = 0;
     private ulong _recordNumberCounter = 0;
     private long _lastActivity = 0;
 
     private readonly Channel<ReadOnlyMemory<byte>> _unreliableChannel;
-    private readonly KcpTransport _reliableKcp;
-    private readonly KcpTransport _streamKcp;
-    private readonly KcpStream _reliableStream;
+    private readonly ReliableTransport _reliableKcp;
+    private readonly ReliableTransport _streamKcp;
 
     private bool _disposed;
 
-    public YamabikoPeer(YamabikoTransport transport, Guid connectionId, Guid peerId)
+    public YamabikoPeer(YamabikoTransport transport, uint connectionId, Guid peerId)
     {
         _transport = transport;
         ConnectionId = connectionId;
-        PeerId = peerId;
+        RemotePeerId = peerId;
 
         _privateKey = RandomNumberGenerator.GetBytes(32);
         PublicKey = KeyHashHelper.GenerateX25519PublicKey(_privateKey);
@@ -74,17 +73,26 @@ public class YamabikoPeer : IDisposable
             FullMode = BoundedChannelFullMode.DropOldest
         });
 
-        _reliableKcp = new KcpTransport(this, 1350, false);
-        _streamKcp = new KcpTransport(this, 1350, true);
-        _reliableStream = new KcpStream(_streamKcp.Conversation, false);
+        _reliableKcp = new ReliableTransport(this, ConnectionId);
+        _reliableKcp.SetNoDelay(true, 10, 2, false);
+        _reliableKcp.SetWindowSize(128, 256);
+        _reliableKcp.SetMtu(1300);
+        _reliableKcp.Start();
+
+        _streamKcp = new ReliableTransport(this, ConnectionId);
+        _streamKcp.SetStreamMode(true);
+        _streamKcp.SetInterval(25);
+        _streamKcp.SetWindowSize(1024, 2048);
+        _streamKcp.SetMtu(1300);
+        _streamKcp.Start();
 
         Task.Run(ReceiveLoopAsync);
         Task.Run(PingLoop);
     }
 
-    public YamabikoPeer(YamabikoTransport transport, Guid peerId) : this(transport, Guid.NewGuid(), peerId) { }
+    public YamabikoPeer(YamabikoTransport transport, Guid peerId) : this(transport, BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)), peerId) { }
 
-    public void ProcessPeerConnect(PeerConnectPacket peerConnect)
+    internal void ProcessPeerConnect(PeerConnectPacket peerConnect)
     {
         if (ConnectionState is not EPeerConnectionState.HANDSHAKE)
             return;
@@ -94,7 +102,7 @@ public class YamabikoPeer : IDisposable
         RemoteEndpoint = new IPEndPoint(peerConnect.Ip, peerConnect.Port);
     }
 
-    public void ProcessDirectConnect(DirectConnectPacket directConnect)
+    internal void ProcessDirectConnect(DirectConnectPacket directConnect)
     {
         if (ConnectionState is not EPeerConnectionState.HANDSHAKE)
             return;
@@ -153,7 +161,7 @@ public class YamabikoPeer : IDisposable
         _remoteAesHeader.Padding = PaddingMode.None;
     }
 
-    public void ProcessConnectDeny(ConnectDenyPacket connectDeny)
+    internal void ProcessConnectDeny(ConnectDenyPacket connectDeny)
     {
         DenyReason = connectDeny.Reason;
         Disconnect();
@@ -184,7 +192,7 @@ public class YamabikoPeer : IDisposable
             return;
 
         int offset = 0;
-        var record = CipherTextRecord.DecryptAndParse(buffer.Span, _remoteAes, _remoteAesIV, _remoteAesHeader, 0, _lastPeerRecordNumber, 16, ref offset);
+        var record = CipherTextRecord.DecryptAndParse(buffer.Span, _remoteAes, _remoteAesIV, _remoteAesHeader, 0, _lastPeerRecordNumber, 4, ref offset);
         if (_lastPeerRecordNumber < record.RecordNumber)
             _lastPeerRecordNumber = record.RecordNumber;
 
@@ -193,7 +201,7 @@ public class YamabikoPeer : IDisposable
         if (ConnectionState is EPeerConnectionState.CONNECTING)
         {
             ConnectionState = EPeerConnectionState.CONNECTED;
-            _tcs.TrySetResult();
+            _connectedTcs.TrySetResult();
         }
 
         switch (record.Type)
@@ -231,10 +239,10 @@ public class YamabikoPeer : IDisposable
                 await _unreliableChannel.Writer.WriteAsync(record.Buffer[1..], ct);
                 break;
             case EPeerPacketType.RELIABLE:
-                await _reliableKcp.InputPacketAsync(record.Buffer[1..], ct);
+                _reliableKcp.Input(record.Buffer[1..]);
                 break;
             case EPeerPacketType.STREAM:
-                await _streamKcp.InputPacketAsync(record.Buffer[1..], ct);
+                _streamKcp.Input(record.Buffer[1..]);
                 break;
             default:
                 break;
@@ -271,8 +279,8 @@ public class YamabikoPeer : IDisposable
         {
             await PingAsync(_cts.Token);
 
-            await _reliableKcp.FlushAsync(_cts.Token);
-            await _streamKcp.FlushAsync(_cts.Token);
+            _reliableKcp.Flush();
+            _streamKcp.Flush();
 
             if (ConnectionState is EPeerConnectionState.CONNECTED && Timeout < Stopwatch.GetElapsedTime(_lastActivity))
                 Disconnect();
@@ -280,7 +288,7 @@ public class YamabikoPeer : IDisposable
         while (!_cts.IsCancellationRequested && await timer.WaitForNextTickAsync(_cts.Token) && ConnectionState is not EPeerConnectionState.DISCONNECTED);
     }
 
-    public async Task PingAsync(CancellationToken ct = default)
+    internal async Task PingAsync(CancellationToken ct = default)
     {
         _pingLastTime = Stopwatch.GetTimestamp();
         await EncryptAndSendBufferAsync(EPeerPacketType.PING, Array.Empty<byte>(), ct);
@@ -292,16 +300,16 @@ public class YamabikoPeer : IDisposable
     public async Task<ReadOnlyMemory<byte>> ReceiveUnreliableAsync(CancellationToken ct = default)
         => await _unreliableChannel.Reader.ReadAsync(ct);
 
-    public Task SendReliableAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
-        => _reliableKcp.WriteAsync(buffer, ct);
+    public void SendReliable(ReadOnlyMemory<byte> buffer)
+        => _reliableKcp.Write(buffer);
 
-    public Task<ReadOnlyMemory<byte>> ReceiveReliableAsync(CancellationToken ct = default)
+    public ValueTask<ReadOnlyMemory<byte>> ReceiveReliableAsync(CancellationToken ct = default)
         => _reliableKcp.ReadAsync(ct);
 
     public Stream GetStream()
-        => _reliableStream;
+        => _streamKcp.GetStream();
 
-    public async Task EncryptAndSendBufferAsync(EPeerPacketType packetType, ReadOnlyMemory<byte> buffer, CancellationToken ct)
+    internal async Task EncryptAndSendBufferAsync(EPeerPacketType packetType, ReadOnlyMemory<byte> buffer, CancellationToken ct)
     {
         if (RemoteEndpoint is null)
             return;
@@ -313,8 +321,9 @@ public class YamabikoPeer : IDisposable
         {
             if (_connectionId is null)
             {
-                _connectionId = new byte[16];
-                ConnectionId.TryWriteBytes(_connectionId, true, out _);
+                _connectionId = new byte[4];
+                int offset = 0;
+                BinaryHelper.Write(ConnectionId, _connectionId, ref offset);
             }
 
             var bufferWithType = rentedBuffer.AsMemory(0, 1 + buffer.Length);
@@ -329,9 +338,17 @@ public class YamabikoPeer : IDisposable
             };
 
             var recordLength = record.Length(true, false);
-            var recordBuffer = new byte[recordLength];
-            record.EncryptAndWrite(recordBuffer, _localAes, _localAesIV, _localAesHeader, true, false);
-            await _transport.SendAsync(RemoteEndpoint, recordBuffer, ct);
+            var recordRentedBuffer = ArrayPool<byte>.Shared.Rent(recordLength);
+            try
+            {
+                var recordBuffer = recordRentedBuffer.AsMemory(0, recordLength);
+                record.EncryptAndWrite(recordBuffer.Span, _localAes, _localAesIV, _localAesHeader, true, false);
+                await _transport.SendAsync(RemoteEndpoint, recordBuffer, ct);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(recordRentedBuffer);
+            }
         }
         finally
         {
@@ -346,7 +363,7 @@ public class YamabikoPeer : IDisposable
         try
         {
             var timeoutTask = Task.Delay(timeout, linkedCts.Token);
-            var first = await Task.WhenAny(timeoutTask, _tcs.Task);
+            var first = await Task.WhenAny(timeoutTask, _connectedTcs.Task);
             if (first == timeoutTask)
                 throw new TimeoutException("Connection has timed out");
             if (ConnectionState is EPeerConnectionState.DISCONNECTED)
@@ -362,16 +379,17 @@ public class YamabikoPeer : IDisposable
     {
         ConnectionState = EPeerConnectionState.DISCONNECTED;
         _cts.Cancel();
-        _tcs.TrySetResult();
+        _connectedTcs.TrySetResult();
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         if (!_disposed)
         {
             Disconnect();
 
             _cts.Dispose();
+            _connectedTcs.TrySetResult();
 
             _localAes?.Dispose();
             _localAes = null;
@@ -385,7 +403,38 @@ public class YamabikoPeer : IDisposable
             _remoteAesHeader?.Dispose();
             _remoteAesHeader = null;
 
-            _reliableStream.Dispose();
+            await _reliableKcp.StopAsync();
+            await _reliableKcp.DisposeAsync();
+
+            await _streamKcp.StopAsync();
+            await _streamKcp.DisposeAsync();
+
+            _disposed = true;
+        }
+        GC.SuppressFinalize(this);
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            Disconnect();
+
+            _cts.Dispose();
+            _connectedTcs.TrySetResult();
+
+            _localAes?.Dispose();
+            _localAes = null;
+
+            _localAesHeader?.Dispose();
+            _localAesHeader = null;
+
+            _remoteAes?.Dispose();
+            _remoteAes = null;
+
+            _remoteAesHeader?.Dispose();
+            _remoteAesHeader = null;
+
             _reliableKcp.Dispose();
             _streamKcp.Dispose();
 

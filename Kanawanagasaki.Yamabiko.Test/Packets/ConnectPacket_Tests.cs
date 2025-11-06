@@ -10,7 +10,7 @@ public class ConnectPacket_Tests
         => new ConnectPacket
         {
             PeerId = Guid.NewGuid(),
-            ConnectionId = Guid.NewGuid(),
+            ConnectionId = BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)),
             PublicKey = RandomNumberGenerator.GetBytes(32),
             Password = Random.Shared.NextDouble() < 0.5 ? null : RandomAsciiString(Random.Shared.Next(0, 200)),
             Extra = Random.Shared.NextDouble() < 0.5 ? null : RandomNumberGenerator.GetBytes(Random.Shared.Next(0, 1000))

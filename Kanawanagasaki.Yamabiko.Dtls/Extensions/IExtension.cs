@@ -2,13 +2,13 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public interface IExtension
+internal interface IExtension
 {
     EExtensionType Type { get; }
     int Length(bool isRequest);
     void Write(Span<byte> buffer, bool isRequest);
 
-    public static IExtension? Parse(EExtensionType type, Span<byte> buffer, bool isRequest)
+    internal static IExtension? Parse(EExtensionType type, Span<byte> buffer, bool isRequest)
         => type switch
         {
             SupportedGroupsExtension.TYPE => SupportedGroupsExtension.Parse(buffer, isRequest),

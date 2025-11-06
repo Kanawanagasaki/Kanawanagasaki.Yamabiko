@@ -1,6 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public enum ENamedGroup : ushort
+internal enum ENamedGroup : ushort
 {
     SECP256R1 = 0x0017,
     SECP384R1 = 0x0018,

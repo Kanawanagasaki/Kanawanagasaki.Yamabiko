@@ -260,21 +260,24 @@ public class CipherTextRecord
         };
     }
 
-    public static ReadOnlySpan<byte> ReadConnectionId(ReadOnlySpan<byte> buffer, int connectionIdLength, int offset)
+    public static bool TryReadConnectionId(ReadOnlySpan<byte> buffer, int connectionIdLength, out ReadOnlySpan<byte> connectionId)
     {
-        if (buffer.Length < offset + 1)
-            return [];
+        connectionId = Array.Empty<byte>();
 
-        if ((buffer[offset] & (byte)EHeaderFlags.FIXED_BITS) != HEADER_BITS)
-            return [];
+        if (buffer.Length < 1)
+            return false;
 
-        var header = (EHeaderFlags)buffer[offset++];
+        if ((buffer[0] & (byte)EHeaderFlags.FIXED_BITS) != HEADER_BITS)
+            return false;
+
+        var header = (EHeaderFlags)buffer[0];
         if (!header.HasFlag(EHeaderFlags.HAS_CONNECTION_ID))
-            return [];
+            return false;
 
-        if (buffer.Length < offset + connectionIdLength)
-            return [];
+        if (buffer.Length < 1 + connectionIdLength)
+            return false;
 
-        return buffer.Slice(offset, connectionIdLength);
+        connectionId = buffer.Slice(1, connectionIdLength);
+        return true;
     }
 }

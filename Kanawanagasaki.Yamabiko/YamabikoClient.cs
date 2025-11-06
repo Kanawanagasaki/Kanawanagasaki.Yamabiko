@@ -15,11 +15,11 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-public class YamabikoClient : IAsyncDisposable
+public class YamabikoClient : IAsyncDisposable, IDisposable
 {
     public delegate Task<PeerConnectResult> AcceptPeerDelegate(PeerConnectPacket peerConnect, CancellationToken ct);
 
-    public delegate bool ValidateCertificatesDelegate(X509Certificate2[] certificates, string domain);
+    public delegate bool ValidateCertificatesDelegate(X509Certificate2[] certificates);
     public ValidateCertificatesDelegate? ValidateCertificatesCallback { get; init; }
 
     public delegate void PeerAdvertisementDelegate(PeerPacket peerPacket);
@@ -60,7 +60,7 @@ public class YamabikoClient : IAsyncDisposable
 
     private ConcurrentDictionary<ulong, AcknowledgeableRecord> _acknowledgeableRecords = [];
     private ConcurrentDictionary<Guid, QueryResult> _queries = [];
-    private ConcurrentDictionary<Guid, YamabikoPeer> _peers = [];
+    private ConcurrentDictionary<uint, YamabikoPeer> _peers = [];
 
     private Channel<(PeerConnectPacket peerConnect, long timestamp)> _peersToAccept;
 
@@ -172,7 +172,7 @@ public class YamabikoClient : IAsyncDisposable
         }
     }
 
-    public async Task ProcessBufferAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct)
+    private async Task ProcessBufferAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct)
     {
         if (buffer.Length < 1)
             return;
@@ -499,7 +499,7 @@ public class YamabikoClient : IAsyncDisposable
                 await SendPacketsAsync([new ConnectPacket
                 {
                     ConnectionId = peer.ConnectionId,
-                    PeerId = peer.PeerId,
+                    PeerId = peer.RemotePeerId,
                     Password = password,
                     PublicKey = peer.PublicKey,
                     Extra = extra
@@ -667,7 +667,7 @@ public class YamabikoClient : IAsyncDisposable
         await SendBufferAsync(ServerEndPoint, buffer, ct);
     }
 
-    public async Task SendBufferAsync(IPEndPoint endpoint, ReadOnlyMemory<byte> buffer, CancellationToken ct)
+    internal async Task SendBufferAsync(IPEndPoint endpoint, ReadOnlyMemory<byte> buffer, CancellationToken ct)
         => await _transport.SendAsync(endpoint, buffer, ct);
 
     public async Task StopAsync()
@@ -765,6 +765,15 @@ public class YamabikoClient : IAsyncDisposable
     {
         Stop();
         await _transport.DisposeAsync();
+
+        _receiveTask?.Dispose();
+        _pingTask?.Dispose();
+    }
+
+    public void Dispose()
+    {
+        Stop();
+        _transport.Dispose();
 
         _receiveTask?.Dispose();
         _pingTask?.Dispose();

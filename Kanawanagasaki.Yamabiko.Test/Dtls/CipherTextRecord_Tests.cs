@@ -145,7 +145,8 @@ public class CipherTextRecord_Tests
 
         record.EncryptAndWrite(buffer, aes, iv, headerAes);
 
-        Assert.Equal(record.ConnectionId, CipherTextRecord.ReadConnectionId(buffer, record.ConnectionId.Length, 0));
+        Assert.True(CipherTextRecord.TryReadConnectionId(buffer, record.ConnectionId.Length, out var connectionIdByes));
+        Assert.Equal(record.ConnectionId, connectionIdByes);
 
         int offset = 0;
         var parsedRecord = CipherTextRecord.DecryptAndParse(buffer, aes, iv, headerAes, 0, 0, record.ConnectionId.Length, ref offset);

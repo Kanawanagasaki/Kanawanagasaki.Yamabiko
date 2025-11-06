@@ -2,14 +2,14 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public class SignatureAlgorithmsExtension : IExtension
+internal class SignatureAlgorithmsExtension : IExtension
 {
-    public const EExtensionType TYPE = EExtensionType.SIGNATURE_ALGORITHMS;
+    internal const EExtensionType TYPE = EExtensionType.SIGNATURE_ALGORITHMS;
     public EExtensionType Type => TYPE;
 
-    public ESignatureAlgorithm[] Algorithms { get; }
+    internal ESignatureAlgorithm[] Algorithms { get; }
 
-    public SignatureAlgorithmsExtension(ESignatureAlgorithm[] algorithms)
+    internal SignatureAlgorithmsExtension(ESignatureAlgorithm[] algorithms)
     {
         Algorithms = algorithms;
     }
@@ -47,7 +47,7 @@ public class SignatureAlgorithmsExtension : IExtension
         }
     }
 
-    public static SignatureAlgorithmsExtension Parse(Span<byte> buffer, bool isRequest)
+    internal static SignatureAlgorithmsExtension Parse(Span<byte> buffer, bool isRequest)
     {
         int offset = 0;
 

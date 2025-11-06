@@ -4,14 +4,14 @@ using Kanawanagasaki.Yamabiko.Dtls.Enums;
 using Kanawanagasaki.Yamabiko.Dtls.Extensions;
 using System;
 
-public class EncryptedExtensionsHandshake : IHandshake
+internal class EncryptedExtensionsHandshake : IHandshake
 {
-    public const EHandshakeType TYPE = EHandshakeType.ENCRYPTED_EXTENSIONS;
+    internal const EHandshakeType TYPE = EHandshakeType.ENCRYPTED_EXTENSIONS;
     public EHandshakeType Type => TYPE;
 
-    public IExtension[] Extensions { get; }
+    internal IExtension[] Extensions { get; }
 
-    public EncryptedExtensionsHandshake(IExtension[] extensions)
+    internal EncryptedExtensionsHandshake(IExtension[] extensions)
     {
         Extensions = extensions;
     }
@@ -43,7 +43,7 @@ public class EncryptedExtensionsHandshake : IHandshake
         }
     }
 
-    public static EncryptedExtensionsHandshake Parse(Span<byte> buffer)
+    internal static EncryptedExtensionsHandshake Parse(Span<byte> buffer)
     {
         int offset = 0;
 

@@ -2,14 +2,14 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public class SupportedVersionsExtension : IExtension
+internal class SupportedVersionsExtension : IExtension
 {
-    public const EExtensionType TYPE = EExtensionType.SUPPORTED_VERSIONS;
+    internal const EExtensionType TYPE = EExtensionType.SUPPORTED_VERSIONS;
     public EExtensionType Type => TYPE;
 
-    public EVersions[] Versions { get; }
+    internal EVersions[] Versions { get; }
 
-    public SupportedVersionsExtension(EVersions[] versions)
+    internal SupportedVersionsExtension(EVersions[] versions)
     {
         Versions = versions;
     }
@@ -55,7 +55,7 @@ public class SupportedVersionsExtension : IExtension
         }
     }
 
-    public static SupportedVersionsExtension Parse(Span<byte> buffer, bool isRequest)
+    internal static SupportedVersionsExtension Parse(Span<byte> buffer, bool isRequest)
     {
         if (isRequest)
         {

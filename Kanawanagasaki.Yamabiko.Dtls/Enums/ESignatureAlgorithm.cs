@@ -1,6 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public enum ESignatureAlgorithm : ushort
+internal enum ESignatureAlgorithm : ushort
 {
     RSA_PKCS1_SHA256 = 0x0401,
     RSA_PKCS1_SHA384 = 0x0501,

@@ -5,10 +5,20 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<WarningsAsErrors>Nullable</WarningsAsErrors>
+
+		<PackageId>Kanawanagasaki.Yamabiko</PackageId>
+		<Version>1.0.0</Version>
+		<Authors>Kanawanagasaki</Authors>
+		<Description>Peer-to-Peer (P2P) communication library with built‑in encryption, peer discovery/advertising, and reliable transport</Description>
+		<PackageProjectUrl>https://github.com/Kanawanagasaki/Kanawanagasaki.Yamabiko</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/Kanawanagasaki/Kanawanagasaki.Yamabiko</RepositoryUrl>
+		<PackageTags>yamabiko;kcp;transport;protocol;udp;reliable;messaging;dtls;tls;hole;punch;nat</PackageTags>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageLicenseFile>LICENSE</PackageLicenseFile>
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="KcpSharp" Version="0.8.8" />
+	  <PackageReference Include="Kanawanagasaki.KCP" Version="1.0.1" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -16,4 +26,9 @@
 	  <ProjectReference Include="..\Kanawanagasaki.Yamabiko.Shared\Kanawanagasaki.Yamabiko.Shared.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<None Include="..\README.md" Pack="true" PackagePath="\" />
+		<None Include="..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\images\ConnectionDiagram.png" Pack="true" PackagePath="\images\" />
+	</ItemGroup>
 </Project>

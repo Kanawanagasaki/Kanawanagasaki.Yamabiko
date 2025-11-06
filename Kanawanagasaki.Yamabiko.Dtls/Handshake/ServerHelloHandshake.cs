@@ -3,19 +3,19 @@
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 using Kanawanagasaki.Yamabiko.Dtls.Extensions;
 
-public class ServerHelloHandshake : IHandshake
+internal class ServerHelloHandshake : IHandshake
 {
-    public const EHandshakeType TYPE = EHandshakeType.SERVER_HELLO;
+    internal const EHandshakeType TYPE = EHandshakeType.SERVER_HELLO;
     public EHandshakeType Type => TYPE;
 
-    public EVersions LegacyVersion { get; init; } = EVersions.DTLS1_2;
-    public byte[] Random { get; }
-    public byte[] LegacySessionId { get; init; } = [];
-    public ECipherSuite CipherSuite { get; }
-    public byte CompressionMethod { get; init; } = 0x00;
-    public IExtension[] Extensions { get; }
+    internal EVersions LegacyVersion { get; init; } = EVersions.DTLS1_2;
+    internal byte[] Random { get; }
+    internal byte[] LegacySessionId { get; init; } = [];
+    internal ECipherSuite CipherSuite { get; }
+    internal byte CompressionMethod { get; init; } = 0x00;
+    internal IExtension[] Extensions { get; }
 
-    public ServerHelloHandshake(byte[] random, ECipherSuite cipherSuite, IExtension[] extensions)
+    internal ServerHelloHandshake(byte[] random, ECipherSuite cipherSuite, IExtension[] extensions)
     {
         if (random.Length != 32)
             throw new ArgumentException("Random must be 32 bytes long", nameof(random));
@@ -85,7 +85,7 @@ public class ServerHelloHandshake : IHandshake
         }
     }
 
-    public static ServerHelloHandshake Parse(Span<byte> buffer)
+    internal static ServerHelloHandshake Parse(Span<byte> buffer)
     {
         int offset = 0;
 

@@ -1,6 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko;
 
-public enum EPeerPacketType : byte
+internal enum EPeerPacketType : byte
 {
     PING = 1,
     PONG = 2,

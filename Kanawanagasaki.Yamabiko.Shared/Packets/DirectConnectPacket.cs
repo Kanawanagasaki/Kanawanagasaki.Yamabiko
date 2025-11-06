@@ -10,7 +10,7 @@ public class DirectConnectPacket : Packet
     public const EPacketType TYPE = EPacketType.DIRECT_CONNECT;
     public override EPacketType Type => TYPE;
 
-    public required Guid ConnectionId { get; init; }
+    public required uint ConnectionId { get; init; }
     
     private byte[] _publicKey = Array.Empty<byte>();
     public required byte[] PublicKey
@@ -61,7 +61,7 @@ public class DirectConnectPacket : Packet
         {
             int offset = 0;
 
-            var connectionId = BinaryHelper.ReadGuid(buffer, ref offset);
+            var connectionId = BinaryHelper.ReadUInt32(buffer, ref offset);
 
             var publicKey = BinaryHelper.ReadByteArray(buffer, ref offset);
 

@@ -1,6 +1,7 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Tags;
 
 using Kanawanagasaki.Yamabiko.Shared.Helpers;
+using System.Text;
 
 public class StringTag : ITag
 {
@@ -14,17 +15,8 @@ public class StringTag : ITag
     }
 
     public byte[] ToByteArray()
-    {
-        int offset = 0;
-        var buffer = new byte[BinaryHelper.BytesCount(Val)];
-        BinaryHelper.Write(Val, buffer, ref offset);
-        return buffer;
-    }
+        => Encoding.UTF8.GetBytes(Val);
 
     public static StringTag Parse(byte tagId, ReadOnlySpan<byte> buffer)
-    {
-        int offset = 0;
-        var val = BinaryHelper.ReadString(buffer, ref offset);
-        return new StringTag(tagId, val ?? string.Empty);
-    }
+        => new StringTag(tagId, Encoding.UTF8.GetString(buffer));
 }

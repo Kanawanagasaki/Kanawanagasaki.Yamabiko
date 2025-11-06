@@ -2,14 +2,14 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public class FinishedHandshake : IHandshake
+internal class FinishedHandshake : IHandshake
 {
-    public const EHandshakeType TYPE = EHandshakeType.FINISHED;
+    internal const EHandshakeType TYPE = EHandshakeType.FINISHED;
     public EHandshakeType Type => TYPE;
 
-    public byte[] VerifyData { get; }
+    internal byte[] VerifyData { get; }
 
-    public FinishedHandshake(byte[] verifyData)
+    internal FinishedHandshake(byte[] verifyData)
     {
         VerifyData = verifyData;
     }
@@ -24,6 +24,6 @@ public class FinishedHandshake : IHandshake
         VerifyData.CopyTo(buffer);
     }
 
-    public static FinishedHandshake Parse(Span<byte> buffer)
+    internal static FinishedHandshake Parse(Span<byte> buffer)
         => new FinishedHandshake(buffer.ToArray());
 }

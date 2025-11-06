@@ -2,14 +2,14 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public class SupportedGroupsExtension : IExtension
+internal class SupportedGroupsExtension : IExtension
 {
-    public const EExtensionType TYPE = EExtensionType.SUPPORTED_GROUPS;
+    internal const EExtensionType TYPE = EExtensionType.SUPPORTED_GROUPS;
     public EExtensionType Type => TYPE;
 
-    public ENamedGroup[] Groups { get; }
+    internal ENamedGroup[] Groups { get; }
 
-    public SupportedGroupsExtension(ENamedGroup[] groups)
+    internal SupportedGroupsExtension(ENamedGroup[] groups)
     {
         Groups = groups;
     }
@@ -39,7 +39,7 @@ public class SupportedGroupsExtension : IExtension
         }
     }
 
-    public static SupportedGroupsExtension Parse(Span<byte> buffer, bool isRequest)
+    internal static SupportedGroupsExtension Parse(Span<byte> buffer, bool isRequest)
     {
         int offset = 0;
 

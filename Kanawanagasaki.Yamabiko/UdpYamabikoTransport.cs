@@ -6,16 +6,16 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
-public class UdpYamabikoTransport : YamabikoTransport
+internal class UdpYamabikoTransport : YamabikoTransport
 {
-    public UdpClient Client { get; }
+    internal UdpClient Client { get; }
 
-    public UdpYamabikoTransport()
+    internal UdpYamabikoTransport()
     {
         Client = new UdpClient();
     }
 
-    public UdpYamabikoTransport(IPEndPoint endpoint)
+    internal UdpYamabikoTransport(IPEndPoint endpoint)
     {
         Client = new UdpClient(endpoint);
     }

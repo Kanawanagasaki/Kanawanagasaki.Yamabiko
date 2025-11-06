@@ -2,15 +2,15 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public class ServerCertVerifyHandshake : IHandshake
+internal class ServerCertVerifyHandshake : IHandshake
 {
-    public const EHandshakeType TYPE = EHandshakeType.CERTIFICATE_VERIFY;
+    internal const EHandshakeType TYPE = EHandshakeType.CERTIFICATE_VERIFY;
     public EHandshakeType Type => TYPE;
 
-    public ESignatureAlgorithm Algorithm { get; }
-    public byte[] Signature { get; }
+    internal ESignatureAlgorithm Algorithm { get; }
+    internal byte[] Signature { get; }
 
-    public ServerCertVerifyHandshake(ESignatureAlgorithm algorithm, byte[] signature)
+    internal ServerCertVerifyHandshake(ESignatureAlgorithm algorithm, byte[] signature)
     {
         Algorithm = algorithm;
         Signature = signature;
@@ -33,7 +33,7 @@ public class ServerCertVerifyHandshake : IHandshake
         Signature.CopyTo(buffer.Slice(4, Signature.Length));
     }
 
-    public static ServerCertVerifyHandshake Parse(Span<byte> buffer)
+    internal static ServerCertVerifyHandshake Parse(Span<byte> buffer)
     {
         if (buffer.Length < 4)
             throw new FormatException("Buffer too small: cannot read signature algorithm and signature length");

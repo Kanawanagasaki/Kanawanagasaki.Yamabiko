@@ -2,14 +2,14 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public interface IHandshake
+internal interface IHandshake
 {
     public EHandshakeType Type { get; }
 
     int Length();
     void Write(Span<byte> buffer);
 
-    public static IHandshake? Parse(EHandshakeType type, Span<byte> buffer)
+    internal static IHandshake? Parse(EHandshakeType type, Span<byte> buffer)
         => type switch
         {
             EHandshakeType.CLIENT_HELLO => ClientHelloHandshake.Parse(buffer),

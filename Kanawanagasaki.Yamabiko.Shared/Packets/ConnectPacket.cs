@@ -11,7 +11,7 @@ public class ConnectPacket : Packet
 
     public required Guid PeerId { get; init; }
 
-    public required Guid ConnectionId { get; init; }
+    public required uint ConnectionId { get; init; }
 
     private string? _password;
     public string? Password
@@ -79,7 +79,7 @@ public class ConnectPacket : Packet
 
             var peerId = BinaryHelper.ReadGuid(buffer, ref offset);
 
-            var connectionId = BinaryHelper.ReadGuid(buffer, ref offset);
+            var connectionId = BinaryHelper.ReadUInt32(buffer, ref offset);
 
             var password = BinaryHelper.ReadString(buffer, ref offset);
 

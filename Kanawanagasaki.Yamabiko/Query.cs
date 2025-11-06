@@ -16,7 +16,7 @@ public class Query
 
     private Guid _requestId = Guid.NewGuid();
 
-    public QueryPacket ToPacket(Guid projectId)
+    internal QueryPacket ToPacket(Guid projectId)
         => new QueryPacket
         {
             ProjectId = projectId,

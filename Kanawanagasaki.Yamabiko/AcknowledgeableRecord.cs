@@ -2,19 +2,19 @@
 
 using Kanawanagasaki.Yamabiko.Dtls;
 
-public class AcknowledgeableRecord
+internal class AcknowledgeableRecord
 {
-    public CipherTextRecord Record { get; }
+    internal CipherTextRecord Record { get; }
 
     private readonly TaskCompletionSource<Ack> _tcs;
 
-    public AcknowledgeableRecord(CipherTextRecord record)
+    internal AcknowledgeableRecord(CipherTextRecord record)
     {
         Record = record;
         _tcs = new TaskCompletionSource<Ack>(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    public async Task<Ack> WaitAcknowledgment(TimeSpan timeout, CancellationToken ct = default)
+    internal async Task<Ack> WaitAcknowledgment(TimeSpan timeout, CancellationToken ct = default)
     {
         var delayTask = Task.Delay(timeout, ct);
         var completed = await Task.WhenAny(_tcs.Task, delayTask).ConfigureAwait(false);
@@ -30,12 +30,12 @@ public class AcknowledgeableRecord
         }
     }
 
-    public void Acknowledge(Ack ack)
+    internal void Acknowledge(Ack ack)
     {
         _tcs.TrySetResult(ack);
     }
 
-    public void Discard()
+    internal void Discard()
     {
         _tcs.TrySetException(new TimeoutException($"Record {Record.RecordNumber} was discarded"));
     }

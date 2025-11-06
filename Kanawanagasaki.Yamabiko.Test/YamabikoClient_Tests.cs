@@ -75,7 +75,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
         var projectId = Guid.NewGuid();
         var client = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, successChance))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client.StartAsync(_cts.Token);
 
@@ -107,7 +107,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
         {
             var client = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, successChance))
             {
-                ValidateCertificatesCallback = (_, _) => true
+                ValidateCertificatesCallback = (_) => true
             };
             await client.StartAsync(_cts.Token);
             clients.Add(client);
@@ -140,7 +140,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
         var projectId = Guid.NewGuid();
         var client = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, successChance))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client.StartAsync(_cts.Token);
 
@@ -189,7 +189,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
         var projectId = Guid.NewGuid();
         var client = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, successChance))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client.StartAsync(_cts.Token);
 
@@ -305,7 +305,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
         var projectId = Guid.NewGuid();
         var client = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, successChance))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client.StartAsync(_cts.Token);
 
@@ -396,7 +396,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
         var projectId = Guid.NewGuid();
         var client = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, successChance))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client.StartAsync(_cts.Token);
 
@@ -557,7 +557,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
         var projectId = Guid.NewGuid();
         var client = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, successChance))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client.StartAsync(_cts.Token);
 
@@ -593,7 +593,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
 
         var client1 = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, 1.0))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client1.StartAsync(_cts.Token);
 
@@ -604,7 +604,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
 
         var client2 = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, 1.0))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client2.StartAsync(_cts.Token);
 
@@ -667,7 +667,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
 
         var client1 = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, 1.0))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client1.StartAsync(_cts.Token);
 
@@ -688,7 +688,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
 
         var client2 = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, 1.0))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client2.StartAsync(_cts.Token);
 
@@ -835,7 +835,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
 
         var client1 = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, successChance))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client1.StartAsync(_cts.Token);
 
@@ -849,7 +849,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
 
         var client2 = new YamabikoClient(ServerTransport.Endpoint, projectId, new ClientTransport(_serverTransport, successChance))
         {
-            ValidateCertificatesCallback = (_, _) => true
+            ValidateCertificatesCallback = (_) => true
         };
         await client2.StartAsync(_cts.Token);
 

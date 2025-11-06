@@ -2,28 +2,28 @@
 
 using System.Buffers;
 
-public sealed class HandshakeMessage
+internal sealed class HandshakeMessage
 {
-    public IHandshake? Handshake { get; private set; }
+    internal IHandshake? Handshake { get; private set; }
 
-    public ushort SequenceNumber { get; }
+    internal ushort SequenceNumber { get; }
 
     private readonly List<HandshakeFragment> _fragments = [];
 
-    public HandshakeMessage(IHandshake handshake, ushort sequenceNum)
+    internal HandshakeMessage(IHandshake handshake, ushort sequenceNum)
     {
         Handshake = handshake;
         SequenceNumber = sequenceNum;
     }
 
-    public HandshakeMessage(HandshakeFragment firstFragment)
+    internal HandshakeMessage(HandshakeFragment firstFragment)
     {
         _fragments.Add(firstFragment);
         SequenceNumber = firstFragment.SequenceNumber;
         ParseFragments();
     }
 
-    public void AddFragment(HandshakeFragment fragment)
+    internal void AddFragment(HandshakeFragment fragment)
     {
         if (Handshake is not null)
             throw new InvalidOperationException("Handshake already assembled");
@@ -87,7 +87,7 @@ public sealed class HandshakeMessage
         }
     }
 
-    public HandshakeFragment[] GetFragments(int fragmentMaxLength)
+    internal HandshakeFragment[] GetFragments(int fragmentMaxLength)
     {
         if (Handshake is null)
             throw new NullReferenceException($"{nameof(Handshake)} was null");
@@ -139,7 +139,7 @@ public sealed class HandshakeMessage
         return fragments;
     }
 
-    public HandshakeFragment GetFragment()
+    internal HandshakeFragment GetFragment()
     {
         if (Handshake is null)
             throw new NullReferenceException("Handshake hasn't been assembled yet");

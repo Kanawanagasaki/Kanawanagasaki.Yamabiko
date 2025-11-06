@@ -9,7 +9,7 @@ public class DirectConnectPacket_Tests
     private static DirectConnectPacket CreateRandomDirectConnectPacket()
         => new DirectConnectPacket
         {
-            ConnectionId = Guid.NewGuid(),
+            ConnectionId = BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)),
             PublicKey = RandomNumberGenerator.GetBytes(32),
             Ip = new IPAddress(RandomNumberGenerator.GetBytes(4)),
             Port = (ushort)Random.Shared.Next(0, ushort.MaxValue)

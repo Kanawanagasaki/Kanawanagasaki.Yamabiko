@@ -64,7 +64,7 @@ static Dictionary<string, string> ParseArgs(string[] args)
         var key = a.TrimStart('-');
 
         var eqIndex = key.IndexOf('=');
-        if (eqIndex >= 0)
+        if (0 <= eqIndex)
         {
             var k = NormalizeKey(key.Substring(0, eqIndex));
             var v = key.Substring(eqIndex + 1);

@@ -16,7 +16,7 @@ public class QueryResult
 
     private readonly Channel<Packet> _channel;
 
-    public QueryResult(QueryPacket query)
+    internal QueryResult(QueryPacket query)
     {
         RequestId = query.RequestId;
         Skip = query.Skip;
@@ -31,7 +31,7 @@ public class QueryResult
         });
     }
 
-    public IReadOnlySet<int> GetMissingIndices()
+    internal IReadOnlySet<int> GetMissingIndices()
     {
         var range = Enumerable.Range(Skip, Count).ToHashSet();
         foreach (var queryPeer in _peers.Values)
@@ -39,7 +39,7 @@ public class QueryResult
         return range;
     }
 
-    public IReadOnlyDictionary<Guid, IReadOnlySet<byte>> GetMissingTags()
+    internal IReadOnlyDictionary<Guid, IReadOnlySet<byte>> GetMissingTags()
     {
         var ret = new Dictionary<Guid, IReadOnlySet<byte>>();
         foreach (var queryPeer in _peers.Values)
@@ -48,7 +48,7 @@ public class QueryResult
         return ret;
     }
 
-    public void ProcessEmptyQueryPacket(EmptyQueryResultPacket emptyQuery)
+    internal void ProcessEmptyQueryPacket(EmptyQueryResultPacket emptyQuery)
     {
         Total = emptyQuery.Total;
         if (Total < Skip + Count)
@@ -57,7 +57,7 @@ public class QueryResult
         _channel.Writer.TryWrite(emptyQuery);
     }
 
-    public void ProcessEmptyQueryExtraPacket(EmptyQueryExtraResultPacket emptyQueryExtra)
+    internal void ProcessEmptyQueryExtraPacket(EmptyQueryExtraResultPacket emptyQueryExtra)
     {
         if(_peers.TryGetValue(emptyQueryExtra.PeerId, out var peer))
             foreach(var tagId in emptyQueryExtra.TagsIds)
@@ -66,7 +66,7 @@ public class QueryResult
         _channel.Writer.TryWrite(emptyQueryExtra);
     }
 
-    public void ProcessPeerPacket(PeerPacket peer)
+    internal void ProcessPeerPacket(PeerPacket peer)
     {
         var queryPeer = new PeerInfo(peer);
         _peers.AddOrUpdate(peer.PeerId, queryPeer, (_, existing) =>
@@ -86,7 +86,7 @@ public class QueryResult
         _channel.Writer.TryWrite(peer);
     }
 
-    public void ProcessPeerExtraPacket(PeerExtraPacket peerExtra)
+    internal void ProcessPeerExtraPacket(PeerExtraPacket peerExtra)
     {
         if (_peers.TryGetValue(peerExtra.PeerId, out var queryPeer))
         {
@@ -99,7 +99,7 @@ public class QueryResult
         _channel.Writer.TryWrite(peerExtra);
     }
 
-    public async Task<Packet?> AwaitNextPacketAsync(CancellationToken ct)
+    internal async Task<Packet?> AwaitNextPacketAsync(CancellationToken ct)
     {
         if (IsCompleted())
             return null;
@@ -107,7 +107,7 @@ public class QueryResult
         return await _channel.Reader.ReadAsync(ct);
     }
 
-    public bool IsCompleted()
+    internal bool IsCompleted()
     {
         var isCompleted = _peers.Count == Count && _peers.Values.All(x => x.MissingTags.Count == 0);
         if (isCompleted)

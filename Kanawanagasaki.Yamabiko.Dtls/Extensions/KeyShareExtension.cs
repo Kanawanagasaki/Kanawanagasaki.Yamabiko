@@ -2,14 +2,14 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public class KeyShareExtension : IExtension
+internal class KeyShareExtension : IExtension
 {
-    public const EExtensionType TYPE = EExtensionType.KEY_SHARE;
+    internal const EExtensionType TYPE = EExtensionType.KEY_SHARE;
     public EExtensionType Type => TYPE;
 
-    public IReadOnlyDictionary<ENamedGroup, byte[]> GroupToKey { get; }
+    internal IReadOnlyDictionary<ENamedGroup, byte[]> GroupToKey { get; }
 
-    public KeyShareExtension(Dictionary<ENamedGroup, byte[]> groupToKey)
+    internal KeyShareExtension(Dictionary<ENamedGroup, byte[]> groupToKey)
     {
         GroupToKey = groupToKey.AsReadOnly();
     }
@@ -59,7 +59,7 @@ public class KeyShareExtension : IExtension
         }
     }
 
-    public static KeyShareExtension Parse(Span<byte> buffer, bool isRequest)
+    internal static KeyShareExtension Parse(Span<byte> buffer, bool isRequest)
     {
         if (isRequest)
         {

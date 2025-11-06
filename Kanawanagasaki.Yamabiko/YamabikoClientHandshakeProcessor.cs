@@ -6,13 +6,13 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 
-public class YamabikoClientHandshakeProcessor : ClientHandshakeProcessor
+internal class YamabikoClientHandshakeProcessor : ClientHandshakeProcessor
 {
     private readonly YamabikoClient _client;
     private readonly YamabikoTransport _transport;
     private readonly YamabikoClient.ValidateCertificatesDelegate? _validateCert;
 
-    public YamabikoClientHandshakeProcessor(YamabikoClient client, YamabikoTransport transport, YamabikoClient.ValidateCertificatesDelegate? validateCert)
+    internal YamabikoClientHandshakeProcessor(YamabikoClient client, YamabikoTransport transport, YamabikoClient.ValidateCertificatesDelegate? validateCert)
     {
         _client = client;
         _transport = transport;
@@ -32,5 +32,5 @@ public class YamabikoClientHandshakeProcessor : ClientHandshakeProcessor
         => await _client.SendBufferAsync(_client.ServerEndPoint, buffer, ct);
 
     protected override bool ValidateCertificates(X509Certificate2[] certificates, string domain)
-        => _validateCert is null ? base.ValidateCertificates(certificates, domain) : _validateCert(certificates, domain);
+        => _validateCert is null ? base.ValidateCertificates(certificates, domain) : _validateCert(certificates);
 }

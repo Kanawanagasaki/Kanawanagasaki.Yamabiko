@@ -2,14 +2,14 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Enums;
 
-public class ConnectionIdExtension : IExtension
+internal class ConnectionIdExtension : IExtension
 {
-    public const EExtensionType TYPE = EExtensionType.CONNECTION_ID;
+    internal const EExtensionType TYPE = EExtensionType.CONNECTION_ID;
     public EExtensionType Type => TYPE;
 
-    public byte[] ConnectionId { get; }
+    internal byte[] ConnectionId { get; }
 
-    public ConnectionIdExtension(byte[] connectionId)
+    internal ConnectionIdExtension(byte[] connectionId)
     {
         if (byte.MaxValue < connectionId.Length)
             throw new ArgumentException($"Connection ID length exceeds {byte.MaxValue} bytes");
@@ -29,7 +29,7 @@ public class ConnectionIdExtension : IExtension
         ConnectionId.CopyTo(buffer[1..]);
     }
 
-    public static ConnectionIdExtension Parse(Span<byte> buffer, bool isRequest)
+    internal static ConnectionIdExtension Parse(Span<byte> buffer, bool isRequest)
     {
         if (buffer.Length < 1)
             throw new FormatException("Buffer too small to read connection ID length");

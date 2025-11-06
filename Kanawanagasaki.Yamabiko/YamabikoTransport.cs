@@ -1,13 +1,14 @@
 ﻿namespace Kanawanagasaki.Yamabiko;
 
 using Kanawanagasaki.Yamabiko.Dtls;
+using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 
-public abstract class YamabikoTransport : IAsyncDisposable
+public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
 {
     private static readonly BoundedChannelOptions _boundedChannelOptions
         = new BoundedChannelOptions(128) { FullMode = BoundedChannelFullMode.DropOldest };
@@ -17,8 +18,8 @@ public abstract class YamabikoTransport : IAsyncDisposable
 
     private readonly ConcurrentDictionary<IPEndPoint, Channel<ReadOnlyMemory<byte>>> _endpointChannels;
     private readonly ConcurrentDictionary<IPEndPoint, long> _endpointLastActivityTimestamps;
-    private readonly ConcurrentDictionary<Guid, Channel<ReadOnlyMemory<byte>>> _connectionIdChannels;
-    private readonly ConcurrentDictionary<Guid, long> _connectionIdActivityTimestamps;
+    private readonly ConcurrentDictionary<uint, Channel<ReadOnlyMemory<byte>>> _connectionIdChannels;
+    private readonly ConcurrentDictionary<uint, long> _connectionIdActivityTimestamps;
 
     private readonly CancellationTokenSource _cts;
     private readonly Task _receiveLoopTask;
@@ -44,10 +45,11 @@ public abstract class YamabikoTransport : IAsyncDisposable
                 var result = await ReceiveAsync(_cts.Token);
                 var now = Stopwatch.GetTimestamp();
 
-                var connectionIdBytes = CipherTextRecord.ReadConnectionId(result.Buffer.Span, 16, 0);
-                if (connectionIdBytes.Length == 16)
+                if (CipherTextRecord.TryReadConnectionId(result.Buffer.Span, 4, out var connectionIdBytes))
                 {
-                    var connectionId = new Guid(connectionIdBytes, true);
+                    int offset = 0;
+                    var connectionId = BinaryHelper.ReadUInt32(connectionIdBytes, ref offset);
+
                     _connectionIdActivityTimestamps.AddOrUpdate(connectionId, now, (_, _) => now);
                     var channel = _connectionIdChannels.GetOrAdd(connectionId, _ => Channel.CreateBounded<ReadOnlyMemory<byte>>(_boundedChannelOptions));
                     await channel.Writer.WriteAsync(result.Buffer);
@@ -102,7 +104,7 @@ public abstract class YamabikoTransport : IAsyncDisposable
         catch (OperationCanceledException) { }
     }
 
-    public async Task<ReadOnlyMemory<byte>> ReceiveFromEndpointAsync(IPEndPoint endpoint, CancellationToken ct = default)
+    internal async Task<ReadOnlyMemory<byte>> ReceiveFromEndpointAsync(IPEndPoint endpoint, CancellationToken ct = default)
     {
         if (_receiveLoopTask.IsFaulted)
             ExceptionDispatchInfo.Capture(_receiveLoopTask.Exception).Throw();
@@ -120,7 +122,7 @@ public abstract class YamabikoTransport : IAsyncDisposable
         return await channel.Reader.ReadAsync(ct);
     }
 
-    public async Task<ReadOnlyMemory<byte>> ReceiveFromConnectionIdAsync(Guid connectionId, CancellationToken ct = default)
+    internal async Task<ReadOnlyMemory<byte>> ReceiveFromConnectionIdAsync(uint connectionId, CancellationToken ct = default)
     {
         if (_receiveLoopTask.IsFaulted)
             ExceptionDispatchInfo.Capture(_receiveLoopTask.Exception).Throw();
@@ -150,29 +152,30 @@ public abstract class YamabikoTransport : IAsyncDisposable
         foreach (var channel in _connectionIdChannels.Values)
             channel.Writer.TryComplete();
 
-        Exception? receiveException = null;
         try
         {
             await _receiveLoopTask.ConfigureAwait(false);
         }
-        catch (Exception e)
-        {
-            receiveException = e;
-        }
+        catch { }
 
-        Exception? cleanupException = null;
         try
         {
             await _cleanupLoopTask.ConfigureAwait(false);
         }
-        catch (Exception e)
-        {
-            cleanupException = e;
-        }
+        catch { }
 
         _cts.Dispose();
+    }
 
-        if (receiveException is not null || cleanupException is not null)
-            throw new AggregateException(new Exception?[] { receiveException, cleanupException }.Where(x => x is not null)!);
+    public void Dispose()
+    {
+        _cts.Cancel();
+
+        foreach (var channel in _endpointChannels.Values)
+            channel.Writer.TryComplete();
+        foreach (var channel in _connectionIdChannels.Values)
+            channel.Writer.TryComplete();
+
+        _cts.Dispose();
     }
 }

@@ -14,17 +14,8 @@ public class ByteArrayTag : ITag
     }
 
     public byte[] ToByteArray()
-    {
-        int offset = 0;
-        var buffer = new byte[BinaryHelper.BytesCount(Val)];
-        BinaryHelper.Write(Val, buffer, ref offset);
-        return buffer;
-    }
+        => Val;
 
     public static ByteArrayTag Parse(byte tagId, ReadOnlySpan<byte> buffer)
-    {
-        int offset = 0;
-        var val = BinaryHelper.ReadByteArray(buffer, ref offset);
-        return new ByteArrayTag(tagId, val ?? Array.Empty<byte>());
-    }
+        => new ByteArrayTag(tagId, buffer.ToArray());
 }

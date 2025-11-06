@@ -26,10 +26,6 @@ public class ServerCertificateHandshake_Tests
         Assert.Equal(data, buffer);
     }
 
-
-
-
-
     private CertificateBuffer CreateCertificateBuffer(int certSize, int extSize)
     {
         var certData = new byte[certSize];

@@ -9,11 +9,11 @@ public sealed class HandshakeFragment
     public required ushort SequenceNumber { get; init; }
     public required int FragmentOffset { get; init; }
 
-    public int FragmentLength => Fragment.Length;
+    internal int FragmentLength => Fragment.Length;
 
-    public byte[] Fragment { get; }
+    internal byte[] Fragment { get; }
 
-    public HandshakeFragment(byte[] fragment)
+    internal HandshakeFragment(byte[] fragment)
     {
         Fragment = fragment;
     }
@@ -62,7 +62,7 @@ public sealed class HandshakeFragment
         Fragment.CopyTo(buffer[12..]);
     }
 
-    public static HandshakeFragment Parse(ReadOnlySpan<byte> buffer)
+    internal static HandshakeFragment Parse(ReadOnlySpan<byte> buffer)
     {
         if (buffer.Length < 12)
             throw new ArgumentException("Buffer too small", nameof(buffer));
