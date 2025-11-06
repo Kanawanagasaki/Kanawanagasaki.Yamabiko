@@ -208,7 +208,7 @@ var receivedBuffer = await peer.ReceiveReliableAsync();
 
 #### Stream
 
-```
+```csharp
 var stream = peer.GetStream();
 await stream.WriteAsync(buffer);
 await stream.ReadAsync(buffer);
