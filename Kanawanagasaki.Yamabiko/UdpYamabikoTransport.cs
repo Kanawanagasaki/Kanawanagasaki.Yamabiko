@@ -12,12 +12,7 @@ internal class UdpYamabikoTransport : YamabikoTransport
 
     internal UdpYamabikoTransport()
     {
-        Client = new UdpClient();
-    }
-
-    internal UdpYamabikoTransport(IPEndPoint endpoint)
-    {
-        Client = new UdpClient(endpoint);
+        Client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
     }
 
     public override async Task SendAsync(IPEndPoint endpoint, ReadOnlyMemory<byte> buffer, CancellationToken ct)

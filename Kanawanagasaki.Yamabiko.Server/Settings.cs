@@ -106,11 +106,14 @@ public class Settings
             {
                 if (File.Exists(PrivKeyPath))
                 {
+                    Console.WriteLine($"[System] Loading private key {PrivKeyPath}");
+
                     try
                     {
                         var pem = File.ReadAllText(PrivKeyPath);
                         _privKeyECDsa = ECDsa.Create();
                         _privKeyECDsa.ImportFromPem(pem);
+                        Console.WriteLine($"[System] Private key loaded");
                     }
                     catch (Exception e)
                     {
