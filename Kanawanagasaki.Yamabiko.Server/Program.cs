@@ -14,6 +14,8 @@ if (GetSettingValue(parsedArgs, nameof(Settings.MTU)) is string mtuStr && int.Tr
     settings.MTU = mtu;
 if (GetSettingValue(parsedArgs, nameof(Settings.CertificatePath)) is string certificatePath)
     settings.CertificatePath = certificatePath;
+if (GetSettingValue(parsedArgs, nameof(Settings.PrivKeyPath)) is string privKeyPath)
+    settings.PrivKeyPath = privKeyPath;
 if (GetSettingValue(parsedArgs, nameof(Settings.MaxClients)) is string maxClientsStr && int.TryParse(maxClientsStr, out var maxClients))
     settings.MaxClients = maxClients;
 if (GetSettingValue(parsedArgs, nameof(Settings.MaxClientsPerRemoteNetwork)) is string maxClientsPerRemoteNetworkStr && int.TryParse(maxClientsPerRemoteNetworkStr, out var maxClientsPerRemoteNetwork))
@@ -21,7 +23,7 @@ if (GetSettingValue(parsedArgs, nameof(Settings.MaxClientsPerRemoteNetwork)) is 
 if (GetSettingValue(parsedArgs, nameof(Settings.MaxInactivitySeconds)) is string maxInactivitySecondsStr && int.TryParse(maxInactivitySecondsStr, out var maxInactivitySeconds))
     settings.MaxInactivitySeconds = maxInactivitySeconds;
 
-Console.WriteLine($"{settings.Domain}:{settings.Port}");
+Console.WriteLine($"[System] Listening on {settings.Domain}:{settings.Port}");
 
 var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (sender, e) =>

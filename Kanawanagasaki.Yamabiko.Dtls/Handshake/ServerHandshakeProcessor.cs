@@ -20,6 +20,7 @@ public class ServerHandshakeProcessor : IDisposable
     private Dictionary<ushort, HandshakeMessage> _serverSeqNumToMessage = new();
 
     private X509Certificate2 _certificate;
+    private RSA _privkeyRsa;
 
     private int _mtu;
 
@@ -38,12 +39,10 @@ public class ServerHandshakeProcessor : IDisposable
     private byte[]? _clientSecret;
     private byte[]? _handshakeSecret;
 
-    public ServerHandshakeProcessor(X509Certificate2 certificate, int mtu)
+    public ServerHandshakeProcessor(X509Certificate2 certificate, RSA privkeyRsa, int mtu)
     {
-        if (!certificate.HasPrivateKey)
-            throw new ArgumentException("The provided certificate must include a private key", nameof(certificate));
-
         _certificate = certificate;
+        _privkeyRsa = privkeyRsa;
         _mtu = mtu;
     }
 
@@ -309,14 +308,7 @@ public class ServerHandshakeProcessor : IDisposable
         KeyHashHelper.CERT_VERIFY_PREFIX.CopyTo(toSign.AsSpan(0, KeyHashHelper.CERT_VERIFY_PREFIX.Length));
         certVerifyHash.CopyTo(toSign.AsSpan(KeyHashHelper.CERT_VERIFY_PREFIX.Length, certVerifyHash.Length));
 
-        using var rsa = _certificate.GetRSAPrivateKey();
-        if (rsa is null)
-        {
-            yield return GetAlertPlainText(EAlertType.INTERNAL_ERROR);
-            throw new InvalidOperationException("The server certificate does not contain an RSA private key");
-        }
-
-        var signature = rsa.SignData(toSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
+        var signature = _privkeyRsa.SignData(toSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
 
         var serverCertVerify = new ServerCertVerifyHandshake(ESignatureAlgorithm.RSA_PSS_RSAE_SHA256, signature);
         var serverCertVerifyMessage = new HandshakeMessage(serverCertVerify, 3);

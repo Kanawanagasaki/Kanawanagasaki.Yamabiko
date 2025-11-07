@@ -33,18 +33,27 @@ public class RemoteNetwork
     {
         if (_settings.MaxClientsPerRemoteNetwork <= _clients.Count && !_clients.ContainsKey(endpoint))
         {
+            Console.WriteLine($"[Network {RemoteIP}, Client {endpoint}] Denied connection. Maximum amount of clients per network reached ({_clients.Count}/{_settings.MaxClientsPerRemoteNetwork})");
+
             client = null;
             return false;
         }
 
         client = _clients.GetOrAdd(endpoint, new Client(endpoint, _settings, _transport, _clientsService, _projectsService));
+
+        Console.WriteLine($"[Network {RemoteIP}, Client {endpoint}] Created ({_clients.Count}/{_settings.MaxClientsPerRemoteNetwork})");
+
         return true;
     }
 
     public Client? RemoveClient(IPEndPoint endpoint)
     {
         if (_clients.TryRemove(endpoint, out var client))
+        {
+            Console.WriteLine($"[Network {RemoteIP}, Client {endpoint}] Removed ({_clients.Count}/{_settings.MaxClientsPerRemoteNetwork})");
+
             return client;
+        }
         return null;
     }
 

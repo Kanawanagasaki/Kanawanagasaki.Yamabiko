@@ -28,7 +28,10 @@ public class Project
         => _peers.GetValueOrDefault(peerId);
 
     public void RemovePeer(Guid peerId)
-        => _peers.TryRemove(peerId, out _);
+    {
+        if (_peers.TryRemove(peerId, out _))
+            Console.WriteLine($"[Project {ProjectId}, Peer {peerId}] Removed");
+    }
 
     public Peer ProcessAdvertisement(Client client, AdvertisePacket ad)
     {
@@ -36,6 +39,13 @@ public class Project
         peer.Name = ad.Name;
         peer.Password = ad.Password;
         peer.Flags = ad.Flags;
+
+        Console.WriteLine($"[Project {ProjectId}] Client {client.EndPoint} is advertising");
+        Console.WriteLine($"\tPeerId: {client.PeerId}");
+        Console.WriteLine($"\tName: {ad.Name}");
+        Console.WriteLine($"\tFlags: {ad.Flags:X}");
+        Console.WriteLine($"\tPassword Protected: {ad.Password is not null}");
+
         return peer;
     }
 

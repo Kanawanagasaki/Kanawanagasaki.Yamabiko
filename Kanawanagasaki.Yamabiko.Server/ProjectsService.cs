@@ -24,7 +24,11 @@ public class ProjectsService
             RemovePeer(client.PeerId);
         }
 
-        var project = _projects.GetOrAdd(ad.ProjectId, new Project(ad.ProjectId));
+        var project = _projects.GetOrAdd(ad.ProjectId, (projId) =>
+        {
+            Console.WriteLine($"[Project {ad.ProjectId}] Created by client {client.EndPoint}");
+            return new Project(ad.ProjectId);
+        });
         _peerIdToProject.TryAdd(client.PeerId, project);
 
         return project.ProcessAdvertisement(client, ad);
@@ -58,8 +62,8 @@ public class ProjectsService
         if (_peerIdToProject.TryRemove(peerId, out var project))
         {
             project.RemovePeer(peerId);
-            if (project.Count == 0 && project.SubscribersCount == 0)
-                _projects.TryRemove(project.ProjectId, out _);
+            if (project.Count == 0 && project.SubscribersCount == 0 && _projects.TryRemove(project.ProjectId, out _))
+                Console.WriteLine($"[Project {project.ProjectId}] Removed");
         }
     }
 }

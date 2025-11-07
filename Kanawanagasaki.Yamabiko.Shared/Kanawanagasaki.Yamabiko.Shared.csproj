@@ -5,6 +5,14 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<WarningsAsErrors>Nullable</WarningsAsErrors>
+
+		<PackageId>Kanawanagasaki.Yamabiko.Shared</PackageId>
+		<Version>1.0.0</Version>
+		<Authors>Kanawanagasaki</Authors>
+		<Description>Peer-to-Peer (P2P) communication library with built‑in encryption, peer discovery/advertising, and reliable transport</Description>
+		<PackageProjectUrl>https://github.com/Kanawanagasaki/Kanawanagasaki.Yamabiko</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/Kanawanagasaki/Kanawanagasaki.Yamabiko</RepositoryUrl>
+		<PackageTags>yamabiko;kcp;transport;protocol;udp;reliable;messaging;dtls;tls;hole;punch;nat</PackageTags>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

@@ -2,6 +2,7 @@
 
 using Kanawanagasaki.Yamabiko.Dtls.Helpers;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 public class Settings
@@ -15,6 +16,13 @@ public class Settings
     {
         get
         {
+            var now = DateTime.UtcNow;
+            if (_selfSignedCertificate is not null && (now < _selfSignedCertificate.NotBefore || _selfSignedCertificate.NotAfter < now))
+            {
+                _selfSignedCertificate.Dispose();
+                _selfSignedCertificate = null;
+                _privKeyRsa = null;
+            }
             if (_selfSignedCertificate is null)
                 _selfSignedCertificate = CertificateHelper.GenerateSelfSignedCertificate(Domain);
             if (!CertificateHelper.MatchesDomain(_selfSignedCertificate, Domain))
@@ -38,23 +46,65 @@ public class Settings
             {
                 _certificate.Dispose();
                 _certificate = null;
+                _privKeyRsa = null;
             }
 
             if (_certificate is null
                 && TimeSpan.FromHours(1) < Stopwatch.GetElapsedTime(_lastCertificateCheck)
-                && CertificatePath is not null
-                && File.Exists(CertificatePath))
+                && !string.IsNullOrWhiteSpace(CertificatePath))
             {
                 _lastCertificateCheck = Stopwatch.GetTimestamp();
 
-                var certificate = X509CertificateLoader.LoadCertificateFromFile(CertificatePath);
-                if (certificate.Verify() && certificate.NotBefore < now && now < certificate.NotAfter)
-                    _certificate = certificate;
+                if (File.Exists(CertificatePath))
+                {
+                    Console.WriteLine($"[System] Loading certificate {CertificatePath}");
+
+                    X509Certificate2? certificate = null;
+                    try
+                    {
+                        certificate = X509CertificateLoader.LoadCertificateFromFile(CertificatePath);
+                        if (certificate.Verify() && certificate.NotBefore < now && now < certificate.NotAfter)
+                        {
+                            _certificate = certificate;
+                            Console.WriteLine($"[System] Certificate loaded");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[System] Certificate failed verification");
+                            certificate.Dispose();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"[System] Error loading certificate: {e.Message}");
+                        certificate?.Dispose();
+                    }
+                }
                 else
-                    certificate.Dispose();
+                {
+                    Console.WriteLine($"[System] Certificate file not found at path: {CertificatePath}");
+                }
+
             }
 
             return _certificate ?? SelfSignedCertificate;
+        }
+    }
+
+    public string? PrivKeyPath { get; set; }
+    private RSA? _privKeyRsa;
+    public RSA? PrivKeyRsa
+    {
+        get
+        {
+            if (_privKeyRsa is not null)
+                return _privKeyRsa;
+
+            var cert = Certificate;
+            if (cert.HasPrivateKey)
+                _privKeyRsa = cert.GetRSAPrivateKey();
+
+            return _privKeyRsa;
         }
     }
 

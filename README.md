@@ -18,6 +18,7 @@ The server supports the following options:
 - `Port` - UDP port to listen on (default: `9999`)
 - `MTU` - Maximum Transmission Unit for UDP datagrams (default: `1400`)
 - `CertificatePath` - path to the server certificate
+- `PrivKeyPath` - path to the certificate private key
 - `MaxClients` - maximum number of concurrent clients (default: `1024`)
 - `MaxClientsPerRemoteNetwork` - maximum number of concurrent clients from a single remote network (default: `8`)
 - `MaxInactivitySeconds` - seconds of inactivity before the server treats a client as disconnected (default: `90`)
@@ -29,7 +30,8 @@ Yamabiko-Server-1.0.0-linux-x64 \
 	-Domain=example.com \
 	-Port=9999 \
 	-MTU=1400 \
-	-CertificatePath=/path/to/certificate
+	-CertificatePath=/path/to/cert.pem \
+	-PrivKeyPath=/path/to/privkey.pem \
 	-MaxClients=1024 \
 	-MaxClientsPerRemoteNetwork=8 \
 	-MaxInactivitySeconds=90

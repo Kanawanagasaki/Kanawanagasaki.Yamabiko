@@ -22,8 +22,11 @@ public class Dtls_Tests(ITestOutputHelper _output)
     {
         var domain = "example.com";
         using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
+        using var rsa = certificate.GetRSAPrivateKey();
 
-        var serverProcessor = new ServerHandshakeProcessor(certificate, mtu);
+        Assert.NotNull(rsa);
+
+        var serverProcessor = new ServerHandshakeProcessor(certificate, rsa, mtu);
 
         var packetsFromServer = new List<byte[]>();
 
@@ -101,8 +104,11 @@ public class Dtls_Tests(ITestOutputHelper _output)
     {
         var domain = "example.com";
         using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
+        using var rsa = certificate.GetRSAPrivateKey();
 
-        var serverProcessor = new ServerHandshakeProcessor(certificate, mtu);
+        Assert.NotNull(rsa);
+
+        var serverProcessor = new ServerHandshakeProcessor(certificate, rsa, mtu);
 
         var packetsFromServer = new List<byte[]>();
 
@@ -162,8 +168,11 @@ public class Dtls_Tests(ITestOutputHelper _output)
     {
         var domain = "example.com";
         using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
+        using var rsa = certificate.GetRSAPrivateKey();
 
-        var serverProcessor = new ServerHandshakeProcessor(certificate, mtu);
+        Assert.NotNull(rsa);
+
+        var serverProcessor = new ServerHandshakeProcessor(certificate, rsa, mtu);
 
         var packetsFromServer = new List<byte[]>();
 
@@ -249,8 +258,11 @@ public class Dtls_Tests(ITestOutputHelper _output)
     {
         var domain = "example.com";
         using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
+        using var rsa = certificate.GetRSAPrivateKey();
 
-        var serverProcessor = new ServerHandshakeProcessor(certificate, mtu);
+        Assert.NotNull(rsa);
+
+        var serverProcessor = new ServerHandshakeProcessor(certificate, rsa, mtu);
 
         var packetsFromServer = new List<byte[]>();
 
@@ -341,8 +353,11 @@ public class Dtls_Tests(ITestOutputHelper _output)
     {
         var domain = "example.com";
         using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
+        using var rsa = certificate.GetRSAPrivateKey();
 
-        var serverProcessor = new ServerHandshakeProcessor(certificate, mtu);
+        Assert.NotNull(rsa);
+
+        var serverProcessor = new ServerHandshakeProcessor(certificate, rsa, mtu);
 
         var packetsFromServer = new List<byte[]>();
 

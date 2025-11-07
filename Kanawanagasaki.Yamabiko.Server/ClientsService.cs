@@ -34,13 +34,19 @@ public class ClientsService
 
     public async Task ProcessBufferAsync(IPEndPoint endpoint, ReadOnlyMemory<byte> buffer, CancellationToken ct)
     {
-        var network = _remoteNetworks.GetOrAdd(endpoint.Address, new RemoteNetwork(endpoint.Address, _settings, _transport, this, _projectsService));
+        var network = _remoteNetworks.GetOrAdd(endpoint.Address, (addr) =>
+        {
+            Console.WriteLine($"[Network {addr}] Created");
+            return new RemoteNetwork(addr, _settings, _transport, this, _projectsService);
+        });
         var client = network.GetClient(endpoint);
 
         if (client is null)
         {
             if (_settings.MaxClients <= _clients.Count)
             {
+                Console.WriteLine($"[Client {endpoint}] Denied connection. Maximum amount of clients reached ({_clients.Count}/{_settings.MaxClients})");
+
                 var alert = new Alert(EAlertType.ACCESS_DENIED);
                 var alertBuffer = new byte[alert.Length()];
                 alert.Write(alertBuffer);
@@ -77,7 +83,11 @@ public class ClientsService
             }
 
             if (client is not null)
+            {
                 _clients.AddOrUpdate(client.PeerId, client, (_, _) => client);
+
+                Console.WriteLine($"[Client {endpoint}] Created ({_clients.Count}/{_settings.MaxClients})");
+            }
         }
 
         if (client is not null)
@@ -93,12 +103,17 @@ public class ClientsService
             {
                 _projectsService.RemovePeer(client.PeerId);
 
-                _clients.TryRemove(client.PeerId, out _);
+                if(_clients.TryRemove(client.PeerId, out _))
+                    Console.WriteLine($"[Client {endpoint}] Removed ({_clients.Count}/{_settings.MaxClients})");
+
                 client.Dispose();
             }
 
             if (network.Count == 0)
-                _remoteNetworks.TryRemove(network.RemoteIP, out _);
+            {
+                if(_remoteNetworks.TryRemove(network.RemoteIP, out _))
+                    Console.WriteLine($"[Network {network.RemoteIP}] Removed");
+            }
         }
     }
 
@@ -143,8 +158,8 @@ public class ClientsService
         {
             await network.ClearAllClients(ct);
 
-            if (network.Count == 0)
-                _remoteNetworks.TryRemove(network.RemoteIP, out _);
+            if (network.Count == 0 && _remoteNetworks.TryRemove(network.RemoteIP, out _))
+                Console.WriteLine($"[Network {network.RemoteIP}] Removed");
         }
 
         foreach (var client in _clients.Values)

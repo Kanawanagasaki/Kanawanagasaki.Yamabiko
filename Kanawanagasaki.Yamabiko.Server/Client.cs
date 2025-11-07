@@ -61,7 +61,15 @@ public class Client : IDisposable
         if (isHandshakePacket)
         {
             if (_handshakeProcessor is null)
-                _handshakeProcessor = new ServerHandshakeProcessor(_settings.Certificate, _settings.MTU);
+            {
+                var rsa = _settings.PrivKeyRsa;
+                if(rsa is null)
+                {
+                    Console.WriteLine("[System] Failed to get private key RSA");
+                    return;
+                }
+                _handshakeProcessor = new ServerHandshakeProcessor(_settings.Certificate, rsa, _settings.MTU);
+            }
 
             try
             {
@@ -346,6 +354,8 @@ public class Client : IDisposable
             return;
         }
 
+        Console.WriteLine($"[Client {EndPoint}] Request to connect to {peer.Client.EndPoint}");
+
         if (peer.Password is not null && peer.Password != connect.Password)
         {
             var connectDeny = new ConnectDenyPacket
@@ -355,6 +365,9 @@ public class Client : IDisposable
                 Reason = "Incorrect password"
             };
             await SendPacketsAsync([connectDeny], ct);
+
+            Console.WriteLine($"[Client {EndPoint}] Connection to {peer.Client.EndPoint} denied: " + connectDeny.Reason);
+
             return;
         }
 
@@ -375,6 +388,8 @@ public class Client : IDisposable
         if (peer is null)
             return;
 
+        Console.WriteLine($"[Client {EndPoint}] Denied connection of {peer.Client.EndPoint}. Reason: " + (connectDeny.Reason ?? "NULL"));
+
         var connectDeny2 = new ConnectDenyPacket
         {
             ConnectionId = connectDeny.ConnectionId,
@@ -389,6 +404,8 @@ public class Client : IDisposable
         var client = _clientsService.GetClientByEndpoint(directConnect.Ip, directConnect.Port);
         if (client is null)
             return;
+
+        Console.WriteLine($"[Client {EndPoint}] Direct connection to {directConnect.Ip}:{directConnect.Port}");
 
         var peerConnect = new DirectConnectPacket
         {
