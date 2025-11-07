@@ -20,7 +20,7 @@ public class ServerHandshakeProcessor : IDisposable
     private Dictionary<ushort, HandshakeMessage> _serverSeqNumToMessage = new();
 
     private X509Certificate2 _certificate;
-    private RSA _privkeyRsa;
+    private ECDsa _privkeyECDsa;
 
     private int _mtu;
 
@@ -39,10 +39,10 @@ public class ServerHandshakeProcessor : IDisposable
     private byte[]? _clientSecret;
     private byte[]? _handshakeSecret;
 
-    public ServerHandshakeProcessor(X509Certificate2 certificate, RSA privkeyRsa, int mtu)
+    public ServerHandshakeProcessor(X509Certificate2 certificate, ECDsa privkeyECDsa, int mtu)
     {
         _certificate = certificate;
-        _privkeyRsa = privkeyRsa;
+        _privkeyECDsa = privkeyECDsa;
         _mtu = mtu;
     }
 
@@ -161,16 +161,14 @@ public class ServerHandshakeProcessor : IDisposable
 
         foreach (var extension in clientHello.Extensions)
         {
-            if (extension is KeyShareExtension)
-                keyShare = (KeyShareExtension)extension;
-            if (extension is SupportedVersionsExtension)
-                supportedVersions = (SupportedVersionsExtension)extension;
-            if (extension is SignatureAlgorithmsExtension)
-                signatureAlgorithms = (SignatureAlgorithmsExtension)extension;
-            if (extension is EncryptThenMacExtension)
-                encryptThenMac = (EncryptThenMacExtension)extension;
-            if (extension is SupportedGroupsExtension)
-                supportedGroups = (SupportedGroupsExtension)extension;
+            switch (extension)
+            {
+                case KeyShareExtension ks: keyShare = ks; break;
+                case SupportedVersionsExtension sv: supportedVersions = sv; break;
+                case SignatureAlgorithmsExtension sa: signatureAlgorithms = sa; break;
+                case EncryptThenMacExtension etm: encryptThenMac = etm; break;
+                case SupportedGroupsExtension sg: supportedGroups = sg; break;
+            }
         }
 
         if (keyShare is null)
@@ -207,7 +205,7 @@ public class ServerHandshakeProcessor : IDisposable
             yield return GetAlertPlainText(EAlertType.MISSING_EXTENSION);
             yield break;
         }
-        if (!signatureAlgorithms.Algorithms.Contains(ESignatureAlgorithm.RSA_PSS_RSAE_SHA256))
+        if (!signatureAlgorithms.Algorithms.Contains(ESignatureAlgorithm.ECDSA_SECP256R1_SHA256))
         {
             yield return GetAlertPlainText(EAlertType.HANDSHAKE_FAILURE);
             yield break;
@@ -308,9 +306,9 @@ public class ServerHandshakeProcessor : IDisposable
         KeyHashHelper.CERT_VERIFY_PREFIX.CopyTo(toSign.AsSpan(0, KeyHashHelper.CERT_VERIFY_PREFIX.Length));
         certVerifyHash.CopyTo(toSign.AsSpan(KeyHashHelper.CERT_VERIFY_PREFIX.Length, certVerifyHash.Length));
 
-        var signature = _privkeyRsa.SignData(toSign, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
+        var signature = _privkeyECDsa.SignData(toSign, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
 
-        var serverCertVerify = new ServerCertVerifyHandshake(ESignatureAlgorithm.RSA_PSS_RSAE_SHA256, signature);
+        var serverCertVerify = new ServerCertVerifyHandshake(ESignatureAlgorithm.ECDSA_SECP256R1_SHA256, signature);
         var serverCertVerifyMessage = new HandshakeMessage(serverCertVerify, 3);
         foreach (var buffer in SerializeCipherText(serverCertVerifyMessage, 2, 2))
             yield return buffer;

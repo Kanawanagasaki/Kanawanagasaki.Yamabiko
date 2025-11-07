@@ -7,7 +7,7 @@
 		<WarningsAsErrors>Nullable</WarningsAsErrors>
 
 		<PackageId>Kanawanagasaki.Yamabiko.Dtls</PackageId>
-		<Version>1.0.0</Version>
+		<Version>1.0.2</Version>
 		<Authors>Kanawanagasaki</Authors>
 		<Description>Peer-to-Peer (P2P) communication library with built‑in encryption, peer discovery/advertising, and reliable transport</Description>
 		<PackageProjectUrl>https://github.com/Kanawanagasaki/Kanawanagasaki.Yamabiko</PackageProjectUrl>

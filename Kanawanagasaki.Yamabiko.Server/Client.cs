@@ -62,13 +62,14 @@ public class Client : IDisposable
         {
             if (_handshakeProcessor is null)
             {
-                var rsa = _settings.PrivKeyRsa;
-                if(rsa is null)
+                var cert = _settings.Certificate;
+                var ecdsa = _settings.PrivKeyECDsa;
+                if(ecdsa is null)
                 {
-                    Console.WriteLine("[System] Failed to get private key RSA");
+                    Console.WriteLine("[System] Failed to get private key");
                     return;
                 }
-                _handshakeProcessor = new ServerHandshakeProcessor(_settings.Certificate, rsa, _settings.MTU);
+                _handshakeProcessor = new ServerHandshakeProcessor(cert, ecdsa, _settings.MTU);
             }
 
             try

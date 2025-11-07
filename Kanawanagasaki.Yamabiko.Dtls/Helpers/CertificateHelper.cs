@@ -1,16 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko.Dtls.Helpers;
-
-using Org.BouncyCastle.Asn1.X509;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Generators;
-using Org.BouncyCastle.Crypto.Operators;
-using Org.BouncyCastle.Math;
-using Org.BouncyCastle.Pkcs;
-using Org.BouncyCastle.Security;
-using Org.BouncyCastle.Utilities;
-using Org.BouncyCastle.X509;
-using Org.BouncyCastle.X509.Extension;
 using System.Formats.Asn1;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 public static class CertificateHelper
@@ -164,58 +154,24 @@ public static class CertificateHelper
         return false;
     }
 
-    public static X509Certificate2 GenerateSelfSignedCertificate(string domain, int keyStrength = 2048, int validityDays = 365)
+    public static X509Certificate2 GenerateSelfSignedCertificate(string domain, int validityDays = 365)
     {
-        var keyGen = new RsaKeyPairGenerator();
-        keyGen.Init(new KeyGenerationParameters(new SecureRandom(), keyStrength));
-        var keyPair = keyGen.GenerateKeyPair();
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
-        var certGen = new X509V3CertificateGenerator();
+        var distinguishedName = new X500DistinguishedName($"CN={domain}");
 
-        var serialNumber = BigIntegers.CreateRandomInRange(BigInteger.One, BigInteger.ValueOf(long.MaxValue), new SecureRandom());
-        certGen.SetSerialNumber(serialNumber);
+        var request = new CertificateRequest(distinguishedName, ecdsa, HashAlgorithmName.SHA256);
 
-        var subjectDn = new X509Name($"CN={domain}");
-        certGen.SetIssuerDN(subjectDn);
-        certGen.SetSubjectDN(subjectDn);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid("1.3.6.1.5.5.7.3.1"), new Oid("1.3.6.1.5.5.7.3.2") }, false));
 
-        var notBefore = DateTime.UtcNow.AddMinutes(-5);
+        var sanBuilder = new SubjectAlternativeNameBuilder();
+        sanBuilder.AddDnsName(domain);
+        request.CertificateExtensions.Add(sanBuilder.Build(false));
+
+        var notBefore = DateTimeOffset.UtcNow.AddMinutes(-5);
         var notAfter = notBefore.AddDays(validityDays);
-        certGen.SetNotBefore(notBefore);
-        certGen.SetNotAfter(notAfter);
-
-        certGen.SetPublicKey(keyPair.Public);
-
-        var subjectKeyId = X509ExtensionUtilities.CreateSubjectKeyIdentifier(keyPair.Public);
-        certGen.AddExtension(X509Extensions.SubjectKeyIdentifier, false, subjectKeyId);
-
-        var authorityKeyIdentifier = X509ExtensionUtilities.CreateAuthorityKeyIdentifier(keyPair.Public);
-        certGen.AddExtension(X509Extensions.AuthorityKeyIdentifier, false, authorityKeyIdentifier);
-
-        certGen.AddExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(false));
-
-        certGen.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment));
-
-        var eku = new ExtendedKeyUsage([KeyPurposeID.id_kp_serverAuth, KeyPurposeID.id_kp_clientAuth]);
-        certGen.AddExtension(X509Extensions.ExtendedKeyUsage, false, eku);
-
-        var san = new GeneralNames(new GeneralName(GeneralName.DnsName, domain));
-        certGen.AddExtension(X509Extensions.SubjectAlternativeName, false, san);
-
-        var signatureFactory = new Asn1SignatureFactory("SHA256WITHRSA", keyPair.Private, new SecureRandom());
-
-        var bcCert = certGen.Generate(signatureFactory);
-
-        var store = new Pkcs12StoreBuilder().Build();
-
-        var certEntry = new X509CertificateEntry(bcCert);
-        store.SetCertificateEntry(domain, certEntry);
-        store.SetKeyEntry(domain, new AsymmetricKeyEntry(keyPair.Private), [certEntry]);
-
-        using var ms = new MemoryStream();
-        store.Save(ms, string.Empty.ToCharArray(), new SecureRandom());
-        var pfxBytes = ms.ToArray();
-
-        return X509CertificateLoader.LoadPkcs12(pfxBytes, string.Empty, X509KeyStorageFlags.Exportable);
+        return request.CreateSelfSigned(notBefore, notAfter);
     }
 }

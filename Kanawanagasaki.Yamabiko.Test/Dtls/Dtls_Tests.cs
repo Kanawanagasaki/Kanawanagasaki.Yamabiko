@@ -22,11 +22,11 @@ public class Dtls_Tests(ITestOutputHelper _output)
     {
         var domain = "example.com";
         using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
-        using var rsa = certificate.GetRSAPrivateKey();
+        using var ecdsa = certificate.GetECDsaPrivateKey();
 
-        Assert.NotNull(rsa);
+        Assert.NotNull(ecdsa);
 
-        var serverProcessor = new ServerHandshakeProcessor(certificate, rsa, mtu);
+        var serverProcessor = new ServerHandshakeProcessor(certificate, ecdsa, mtu);
 
         var packetsFromServer = new List<byte[]>();
 
@@ -104,11 +104,11 @@ public class Dtls_Tests(ITestOutputHelper _output)
     {
         var domain = "example.com";
         using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
-        using var rsa = certificate.GetRSAPrivateKey();
+        using var ecdsa = certificate.GetECDsaPrivateKey();
 
-        Assert.NotNull(rsa);
+        Assert.NotNull(ecdsa);
 
-        var serverProcessor = new ServerHandshakeProcessor(certificate, rsa, mtu);
+        var serverProcessor = new ServerHandshakeProcessor(certificate, ecdsa, mtu);
 
         var packetsFromServer = new List<byte[]>();
 
@@ -168,11 +168,11 @@ public class Dtls_Tests(ITestOutputHelper _output)
     {
         var domain = "example.com";
         using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
-        using var rsa = certificate.GetRSAPrivateKey();
+        using var ecdsa = certificate.GetECDsaPrivateKey();
 
-        Assert.NotNull(rsa);
+        Assert.NotNull(ecdsa);
 
-        var serverProcessor = new ServerHandshakeProcessor(certificate, rsa, mtu);
+        var serverProcessor = new ServerHandshakeProcessor(certificate, ecdsa, mtu);
 
         var packetsFromServer = new List<byte[]>();
 
@@ -258,11 +258,11 @@ public class Dtls_Tests(ITestOutputHelper _output)
     {
         var domain = "example.com";
         using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
-        using var rsa = certificate.GetRSAPrivateKey();
+        using var ecdsa = certificate.GetECDsaPrivateKey();
 
-        Assert.NotNull(rsa);
+        Assert.NotNull(ecdsa);
 
-        var serverProcessor = new ServerHandshakeProcessor(certificate, rsa, mtu);
+        var serverProcessor = new ServerHandshakeProcessor(certificate, ecdsa, mtu);
 
         var packetsFromServer = new List<byte[]>();
 
@@ -353,11 +353,11 @@ public class Dtls_Tests(ITestOutputHelper _output)
     {
         var domain = "example.com";
         using var certificate = CertificateHelper.GenerateSelfSignedCertificate(domain);
-        using var rsa = certificate.GetRSAPrivateKey();
+        using var ecdsa = certificate.GetECDsaPrivateKey();
 
-        Assert.NotNull(rsa);
+        Assert.NotNull(ecdsa);
 
-        var serverProcessor = new ServerHandshakeProcessor(certificate, rsa, mtu);
+        var serverProcessor = new ServerHandshakeProcessor(certificate, ecdsa, mtu);
 
         var packetsFromServer = new List<byte[]>();
 

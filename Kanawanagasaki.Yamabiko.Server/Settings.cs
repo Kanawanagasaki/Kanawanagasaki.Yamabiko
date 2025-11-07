@@ -16,12 +16,13 @@ public class Settings
     {
         get
         {
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             if (_selfSignedCertificate is not null && (now < _selfSignedCertificate.NotBefore || _selfSignedCertificate.NotAfter < now))
             {
                 _selfSignedCertificate.Dispose();
                 _selfSignedCertificate = null;
-                _privKeyRsa = null;
+                _privKeyECDsa?.Dispose();
+                _privKeyECDsa = null;
             }
             if (_selfSignedCertificate is null)
                 _selfSignedCertificate = CertificateHelper.GenerateSelfSignedCertificate(Domain);
@@ -41,12 +42,13 @@ public class Settings
     {
         get
         {
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             if (_certificate is not null && (now < _certificate.NotBefore || _certificate.NotAfter < now))
             {
                 _certificate.Dispose();
                 _certificate = null;
-                _privKeyRsa = null;
+                _privKeyECDsa?.Dispose();
+                _privKeyECDsa = null;
             }
 
             if (_certificate is null
@@ -92,19 +94,46 @@ public class Settings
     }
 
     public string? PrivKeyPath { get; set; }
-    private RSA? _privKeyRsa;
-    public RSA? PrivKeyRsa
+    private ECDsa? _privKeyECDsa;
+    public ECDsa? PrivKeyECDsa
     {
         get
         {
-            if (_privKeyRsa is not null)
-                return _privKeyRsa;
+            if (_privKeyECDsa is not null)
+                return _privKeyECDsa;
 
-            var cert = Certificate;
-            if (cert.HasPrivateKey)
-                _privKeyRsa = cert.GetRSAPrivateKey();
+            if (!string.IsNullOrWhiteSpace(PrivKeyPath))
+            {
+                if (File.Exists(PrivKeyPath))
+                {
+                    try
+                    {
+                        var pem = File.ReadAllText(PrivKeyPath);
+                        _privKeyECDsa = ECDsa.Create();
+                        _privKeyECDsa.ImportFromPem(pem);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"[System] {e.GetType().Name}. Failed to import private key. {e.Message}");
 
-            return _privKeyRsa;
+                        _privKeyECDsa?.Dispose();
+                        _privKeyECDsa = null;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"[System] Private Key file not found at path: {PrivKeyPath}");
+                }
+            }
+
+            if (_privKeyECDsa is null)
+            {
+                var cert = Certificate;
+                if (cert.HasPrivateKey)
+                    _privKeyECDsa = cert.GetECDsaPrivateKey();
+            }
+
+            return _privKeyECDsa;
         }
     }
 

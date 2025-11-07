@@ -128,7 +128,7 @@ public abstract class ClientHandshakeProcessor : IDisposable
                 [
                     new KeyShareExtension(new() { [ENamedGroup.X25519] = _publicKey }),
                     new SupportedVersionsExtension([EVersions.DTLS1_3]),
-                    new SignatureAlgorithmsExtension([ESignatureAlgorithm.RSA_PSS_RSAE_SHA256]),
+                    new SignatureAlgorithmsExtension([ESignatureAlgorithm.ECDSA_SECP256R1_SHA256]),
                     new EncryptThenMacExtension(),
                     new SupportedGroupsExtension([ENamedGroup.X25519])
                 ]
@@ -177,54 +177,6 @@ public abstract class ClientHandshakeProcessor : IDisposable
         finally
         {
             Reset(false);
-        }
-    }
-
-    private async Task TryProcessNextHandshakeMessage(CancellationToken ct)
-    {
-        if (State is EClientHandshakeState.WAITING_SERVER_HELLO
-            && _handshakeTypeToMessage.TryGetValue(EHandshakeType.SERVER_HELLO, out var serverHelloMessage)
-            && serverHelloMessage.Handshake is ServerHelloHandshake serverHello)
-        {
-            if (serverHelloMessage.SequenceNumber != 0)
-                throw new FormatException("Server sent ServerHello out of order");
-            ProcessServerHello(serverHello);
-        }
-
-        if (State is EClientHandshakeState.WAITING_ENCRYPTED_EXTENSIONS
-            && _handshakeTypeToMessage.TryGetValue(EHandshakeType.ENCRYPTED_EXTENSIONS, out var encryptedExtensionsMessage)
-            && encryptedExtensionsMessage.Handshake is EncryptedExtensionsHandshake encryptedExtensions)
-        {
-            if (encryptedExtensionsMessage.SequenceNumber != 1)
-                throw new FormatException("Server sent Encrypted Extensions out of order");
-            ProcessEncryptedExtensions(encryptedExtensions);
-        }
-
-        if (State is EClientHandshakeState.WAITING_CERTIFICATE
-            && _handshakeTypeToMessage.TryGetValue(EHandshakeType.CERTIFICATE, out var serverCertificateMessage)
-            && serverCertificateMessage.Handshake is ServerCertificateHandshake serverCertificate)
-        {
-            if (serverCertificateMessage.SequenceNumber != 2)
-                throw new FormatException("Server sent certificate out of order");
-            ProcessServerCertificate(serverCertificate);
-        }
-
-        if (State is EClientHandshakeState.WAITING_CERTIFICATE_VERIFY
-            && _handshakeTypeToMessage.TryGetValue(EHandshakeType.CERTIFICATE_VERIFY, out var serverCertVerifyMessage)
-            && serverCertVerifyMessage.Handshake is ServerCertVerifyHandshake serverCertVerify)
-        {
-            if (serverCertVerifyMessage.SequenceNumber != 3)
-                throw new FormatException("Server sent certificate verify out of order");
-            ProcessServerCertVerify(serverCertVerify);
-        }
-
-        if (State is EClientHandshakeState.WAITING_HANDSHAKE_FINISHED
-            && _handshakeTypeToMessage.TryGetValue(EHandshakeType.FINISHED, out var serverFinishedMessage)
-            && serverFinishedMessage.Handshake is FinishedHandshake serverFinished)
-        {
-            if (serverFinishedMessage.SequenceNumber != 4)
-                throw new FormatException("Server sent finished out of order");
-            await ProcessServerFinishedAsync(serverFinished, ct);
         }
     }
 
@@ -277,13 +229,67 @@ public abstract class ClientHandshakeProcessor : IDisposable
             else
             {
                 var record = PlainTextRecord.Parse(buffer.Span, 0, 0, ref offset);
-                if (record.Type is not ERecordType.HANDSHAKE)
-                    return;
-
-                var handshakeFragment = HandshakeFragment.Parse(record.Buffer);
-                ParseFragment(handshakeFragment);
-                await TryProcessNextHandshakeMessage(ct);
+                if(record.Type is ERecordType.ALERT)
+                {
+                    var alert = Alert.Parse(record.Buffer);
+                    if (alert.Level == 2)
+                        throw new IOException("Failed to finish handshake: " + alert.Type);
+                }
+                else if (record.Type is ERecordType.HANDSHAKE)
+                {
+                    var handshakeFragment = HandshakeFragment.Parse(record.Buffer);
+                    ParseFragment(handshakeFragment);
+                    await TryProcessNextHandshakeMessage(ct);
+                }
             }
+        }
+    }
+
+    private async Task TryProcessNextHandshakeMessage(CancellationToken ct)
+    {
+        if (State is EClientHandshakeState.WAITING_SERVER_HELLO
+            && _handshakeTypeToMessage.TryGetValue(EHandshakeType.SERVER_HELLO, out var serverHelloMessage)
+            && serverHelloMessage.Handshake is ServerHelloHandshake serverHello)
+        {
+            if (serverHelloMessage.SequenceNumber != 0)
+                throw new FormatException("Server sent ServerHello out of order");
+            ProcessServerHello(serverHello);
+        }
+
+        if (State is EClientHandshakeState.WAITING_ENCRYPTED_EXTENSIONS
+            && _handshakeTypeToMessage.TryGetValue(EHandshakeType.ENCRYPTED_EXTENSIONS, out var encryptedExtensionsMessage)
+            && encryptedExtensionsMessage.Handshake is EncryptedExtensionsHandshake encryptedExtensions)
+        {
+            if (encryptedExtensionsMessage.SequenceNumber != 1)
+                throw new FormatException("Server sent Encrypted Extensions out of order");
+            ProcessEncryptedExtensions(encryptedExtensions);
+        }
+
+        if (State is EClientHandshakeState.WAITING_CERTIFICATE
+            && _handshakeTypeToMessage.TryGetValue(EHandshakeType.CERTIFICATE, out var serverCertificateMessage)
+            && serverCertificateMessage.Handshake is ServerCertificateHandshake serverCertificate)
+        {
+            if (serverCertificateMessage.SequenceNumber != 2)
+                throw new FormatException("Server sent certificate out of order");
+            ProcessServerCertificate(serverCertificate);
+        }
+
+        if (State is EClientHandshakeState.WAITING_CERTIFICATE_VERIFY
+            && _handshakeTypeToMessage.TryGetValue(EHandshakeType.CERTIFICATE_VERIFY, out var serverCertVerifyMessage)
+            && serverCertVerifyMessage.Handshake is ServerCertVerifyHandshake serverCertVerify)
+        {
+            if (serverCertVerifyMessage.SequenceNumber != 3)
+                throw new FormatException("Server sent certificate verify out of order");
+            ProcessServerCertVerify(serverCertVerify);
+        }
+
+        if (State is EClientHandshakeState.WAITING_HANDSHAKE_FINISHED
+            && _handshakeTypeToMessage.TryGetValue(EHandshakeType.FINISHED, out var serverFinishedMessage)
+            && serverFinishedMessage.Handshake is FinishedHandshake serverFinished)
+        {
+            if (serverFinishedMessage.SequenceNumber != 4)
+                throw new FormatException("Server sent finished out of order");
+            await ProcessServerFinishedAsync(serverFinished, ct);
         }
     }
 
@@ -416,7 +422,7 @@ public abstract class ClientHandshakeProcessor : IDisposable
         if (_serverCertificate is null)
             throw new NullReferenceException("Server certificate verification was received before the server certificate itself");
 
-        if (serverCertVerify.Algorithm is not ESignatureAlgorithm.RSA_PSS_RSAE_SHA256)
+        if (serverCertVerify.Algorithm is not ESignatureAlgorithm.ECDSA_SECP256R1_SHA256)
             throw new NotSupportedException("The server used an unsupported signature algorithm");
 
         if (!_clientSeqNumToMessage.TryGetValue(0, out var clientHelloMessage))
@@ -453,11 +459,11 @@ public abstract class ClientHandshakeProcessor : IDisposable
         KeyHashHelper.CERT_VERIFY_PREFIX.CopyTo(buffer.Slice(0, KeyHashHelper.CERT_VERIFY_PREFIX.Length));
         hash.CopyTo(buffer.Slice(KeyHashHelper.CERT_VERIFY_PREFIX.Length, hash.Length));
 
-        using var rsa = _serverCertificate.GetRSAPublicKey();
-        if (rsa is null)
-            throw new InvalidOperationException("The server certificate does not contain an RSA public key");
+        using var ecdsa = _serverCertificate.GetECDsaPublicKey();
+        if (ecdsa is null)
+            throw new InvalidOperationException("The server certificate does not contain an ECDsa public key");
 
-        if (!rsa.VerifyData(buffer, serverCertVerify.Signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pss))
+        if (!ecdsa.VerifyData(buffer, serverCertVerify.Signature.AsSpan(), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation))
             throw new AuthenticationException("The server's CertificateVerify signature failed verification");
 
         State = EClientHandshakeState.WAITING_HANDSHAKE_FINISHED;
