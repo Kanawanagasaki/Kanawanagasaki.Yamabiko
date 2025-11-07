@@ -43,7 +43,7 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
     private byte[]? _remoteAesIV;
     private Aes? _remoteAesHeader;
 
-    public EPeerConnectionState ConnectionState { get; private set; } = EPeerConnectionState.HANDSHAKE;
+    public EConnectionState ConnectionState { get; private set; } = EConnectionState.HANDSHAKE;
     public string? DenyReason { get; private set; }
 
     private readonly CancellationTokenSource _cts = new();
@@ -94,20 +94,20 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
     internal void ProcessPeerConnect(PeerConnectPacket peerConnect)
     {
-        if (ConnectionState is not EPeerConnectionState.HANDSHAKE)
+        if (ConnectionState is not EConnectionState.HANDSHAKE)
             return;
 
-        ConnectionState = EPeerConnectionState.CONNECTING;
+        ConnectionState = EConnectionState.CONNECTING;
         DeriveKeys(peerConnect.PublicKey);
         RemoteEndpoint = new IPEndPoint(peerConnect.Ip, peerConnect.Port);
     }
 
     internal void ProcessDirectConnect(DirectConnectPacket directConnect)
     {
-        if (ConnectionState is not EPeerConnectionState.HANDSHAKE)
+        if (ConnectionState is not EConnectionState.HANDSHAKE)
             return;
 
-        ConnectionState = EPeerConnectionState.CONNECTING;
+        ConnectionState = EConnectionState.CONNECTING;
         DeriveKeys(directConnect.PublicKey);
         RemoteEndpoint = new IPEndPoint(directConnect.Ip, directConnect.Port);
     }
@@ -169,7 +169,7 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
     private async Task ReceiveLoopAsync()
     {
-        while (!_cts.IsCancellationRequested && ConnectionState is not EPeerConnectionState.DISCONNECTED)
+        while (!_cts.IsCancellationRequested && ConnectionState is not EConnectionState.DISCONNECTED)
         {
             try
             {
@@ -181,11 +181,13 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
                 OnError?.Invoke(e);
             }
         }
+
+        ConnectionState = EConnectionState.DISCONNECTED;
     }
 
     private async Task ProcessBufferAsync(ReadOnlyMemory<byte> buffer)
     {
-        if (ConnectionState is EPeerConnectionState.DISCONNECTED)
+        if (ConnectionState is EConnectionState.DISCONNECTED)
             return;
 
         if (_remoteAes is null || _remoteAesIV is null || _remoteAesHeader is null)
@@ -198,9 +200,9 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
         _lastActivity = Stopwatch.GetTimestamp();
 
-        if (ConnectionState is EPeerConnectionState.CONNECTING)
+        if (ConnectionState is EConnectionState.CONNECTING)
         {
-            ConnectionState = EPeerConnectionState.CONNECTED;
+            ConnectionState = EConnectionState.CONNECTED;
             _connectedTcs.TrySetResult();
         }
 
@@ -282,10 +284,12 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
             _reliableKcp.Flush();
             _streamKcp.Flush();
 
-            if (ConnectionState is EPeerConnectionState.CONNECTED && Timeout < Stopwatch.GetElapsedTime(_lastActivity))
+            if (ConnectionState is EConnectionState.CONNECTED && Timeout < Stopwatch.GetElapsedTime(_lastActivity))
                 Disconnect();
         }
-        while (!_cts.IsCancellationRequested && await timer.WaitForNextTickAsync(_cts.Token) && ConnectionState is not EPeerConnectionState.DISCONNECTED);
+        while (!_cts.IsCancellationRequested && await timer.WaitForNextTickAsync(_cts.Token) && ConnectionState is not EConnectionState.DISCONNECTED);
+
+        ConnectionState = EConnectionState.DISCONNECTED;
     }
 
     internal async Task PingAsync(CancellationToken ct = default)
@@ -366,7 +370,7 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
             var first = await Task.WhenAny(timeoutTask, _connectedTcs.Task);
             if (first == timeoutTask)
                 throw new TimeoutException("Connection has timed out");
-            if (ConnectionState is EPeerConnectionState.DISCONNECTED)
+            if (ConnectionState is EConnectionState.DISCONNECTED)
                 throw new DisconnectedException("Peer disconnected");
         }
         finally
@@ -377,7 +381,7 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
     public void Disconnect()
     {
-        ConnectionState = EPeerConnectionState.DISCONNECTED;
+        ConnectionState = EConnectionState.DISCONNECTED;
         _cts.Cancel();
         _connectedTcs.TrySetResult();
     }

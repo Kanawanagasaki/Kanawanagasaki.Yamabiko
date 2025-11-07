@@ -34,6 +34,8 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
     public TimeSpan ResendInterval { get; set; } = TimeSpan.FromSeconds(1);
     public string? CertificateDomain { get; set; }
 
+    public EConnectionState ConnectionState { get; private set; } = EConnectionState.DISCONNECTED;
+
     public IPEndPoint ServerEndPoint { get; }
 
     private readonly YamabikoTransport _transport;
@@ -83,17 +85,27 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
     {
         Stop();
 
-        _handshakeCts = new CancellationTokenSource();
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_handshakeCts.Token, ct);
+        ConnectionState = EConnectionState.HANDSHAKE;
 
-        _handshakeProcessor = new YamabikoClientHandshakeProcessor(this, _transport, ValidateCertificatesCallback)
+        try
         {
-            Timeout = Timeout
-        };
-        await _handshakeProcessor.RunAsync(linkedCts.Token);
+            _handshakeCts = new CancellationTokenSource();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_handshakeCts.Token, ct);
 
-        _handshakeCts?.Dispose();
-        _handshakeCts = null;
+            _handshakeProcessor = new YamabikoClientHandshakeProcessor(this, _transport, ValidateCertificatesCallback)
+            {
+                Timeout = Timeout
+            };
+            await _handshakeProcessor.RunAsync(linkedCts.Token);
+
+            _handshakeCts?.Dispose();
+            _handshakeCts = null;
+        }
+        catch
+        {
+            ConnectionState = EConnectionState.DISCONNECTED;
+            throw;
+        }
 
         if (_handshakeProcessor.State is EClientHandshakeState.DONE
             && _handshakeProcessor.ClientApplicationKey is not null
@@ -103,6 +115,8 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
             && _handshakeProcessor.ServerApplicationIV is not null
             && _handshakeProcessor.ServerRecordNumberKey is not null)
         {
+            ConnectionState = EConnectionState.CONNECTED;
+
             _clientAes = new AesGcm(_handshakeProcessor.ClientApplicationKey, AesGcm.TagByteSizes.MaxSize);
             _clientIV = _handshakeProcessor.ClientApplicationIV;
             _clientRecordNumberAes = Aes.Create();
@@ -136,13 +150,14 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
         }
         else
         {
+            ConnectionState = EConnectionState.DISCONNECTED;
             throw new DisconnectedException("Handshake with server failed");
         }
     }
 
     private async Task PingLoopAsync()
     {
-        while (_pingCts is not null && !_pingCts.IsCancellationRequested)
+        while (_pingCts is not null && !_pingCts.IsCancellationRequested && ConnectionState is not EConnectionState.DISCONNECTED)
         {
             try
             {
@@ -154,14 +169,17 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
             if (Timeout < Stopwatch.GetElapsedTime(_serverLastActivity))
             {
                 await StopAsync();
+                ConnectionState = EConnectionState.DISCONNECTED;
                 throw new DisconnectedException("Server timeout");
             }
         }
+
+        ConnectionState = EConnectionState.DISCONNECTED;
     }
 
     private async Task ReceiveLoopAsync()
     {
-        while (_receiveCts is not null && !_receiveCts.IsCancellationRequested)
+        while (_receiveCts is not null && !_receiveCts.IsCancellationRequested && ConnectionState is not EConnectionState.DISCONNECTED)
         {
             try
             {
@@ -170,6 +188,8 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
             }
             catch (OperationCanceledException) { }
         }
+
+        ConnectionState = EConnectionState.DISCONNECTED;
     }
 
     private async Task ProcessBufferAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct)
@@ -305,7 +325,7 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
             }
             await Task.Delay(ResendInterval, linkedCts.Token);
         }
-        while (peer.ConnectionState is EPeerConnectionState.CONNECTING);
+        while (peer.ConnectionState is EConnectionState.CONNECTING);
     }
 
     public async Task AdvertiseAsync(Advertisement ad, CancellationToken ct = default)
@@ -506,15 +526,15 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
                 }], false, linkedCts.Token);
                 await Task.Delay(ResendInterval, linkedCts.Token);
             }
-            while (peer.ConnectionState is EPeerConnectionState.HANDSHAKE or EPeerConnectionState.CONNECTING);
+            while (peer.ConnectionState is EConnectionState.HANDSHAKE or EConnectionState.CONNECTING);
         }
         catch (OperationCanceledException)
         {
-            if (peer.ConnectionState is EPeerConnectionState.HANDSHAKE or EPeerConnectionState.CONNECTING)
+            if (peer.ConnectionState is EConnectionState.HANDSHAKE or EConnectionState.CONNECTING)
                 peer.Disconnect();
         }
 
-        if (peer.ConnectionState is EPeerConnectionState.DISCONNECTED)
+        if (peer.ConnectionState is EConnectionState.DISCONNECTED)
         {
             if (peer.DenyReason is not null)
                 throw new ConnectionDeniedException("Connection denied with reason: " + peer.DenyReason);
@@ -733,6 +753,8 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
 
     private void Stop()
     {
+        ConnectionState = EConnectionState.DISCONNECTED;
+
         _receiveCts?.Cancel();
         _receiveCts?.Dispose();
         _receiveCts = null;

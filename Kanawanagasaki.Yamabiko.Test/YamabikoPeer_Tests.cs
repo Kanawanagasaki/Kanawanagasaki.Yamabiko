@@ -91,8 +91,8 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
 
         await Task.WhenAll(peer1.WaitUntilConnectedAsync(TimeSpan.FromSeconds(90)), peer2.WaitUntilConnectedAsync(TimeSpan.FromSeconds(90)));
 
-        Assert.Equal(EPeerConnectionState.CONNECTED, peer1.ConnectionState);
-        Assert.Equal(EPeerConnectionState.CONNECTED, peer2.ConnectionState);
+        Assert.Equal(EConnectionState.CONNECTED, peer1.ConnectionState);
+        Assert.Equal(EConnectionState.CONNECTED, peer2.ConnectionState);
 
         peer1.Disconnect();
         peer2.Disconnect();
@@ -143,8 +143,8 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
 
         await Task.WhenAll(peer1.WaitUntilConnectedAsync(TimeSpan.FromSeconds(90)), peer2.WaitUntilConnectedAsync(TimeSpan.FromSeconds(90)));
 
-        Assert.Equal(EPeerConnectionState.CONNECTED, peer1.ConnectionState);
-        Assert.Equal(EPeerConnectionState.CONNECTED, peer2.ConnectionState);
+        Assert.Equal(EConnectionState.CONNECTED, peer1.ConnectionState);
+        Assert.Equal(EConnectionState.CONNECTED, peer2.ConnectionState);
 
         var data1 = RandomNumberGenerator.GetBytes(Random.Shared.Next(100, 1000));
         await peer1.SendUnreliableAsync(data1);
@@ -210,8 +210,8 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
 
         await Task.WhenAll(peer1.WaitUntilConnectedAsync(TimeSpan.FromSeconds(90)), peer2.WaitUntilConnectedAsync(TimeSpan.FromSeconds(90)));
 
-        Assert.Equal(EPeerConnectionState.CONNECTED, peer1.ConnectionState);
-        Assert.Equal(EPeerConnectionState.CONNECTED, peer2.ConnectionState);
+        Assert.Equal(EConnectionState.CONNECTED, peer1.ConnectionState);
+        Assert.Equal(EConnectionState.CONNECTED, peer2.ConnectionState);
 
         var data1 = Enumerable.Range(0, 4096).Select(x => (byte)x).ToArray();
         peer1.SendReliable(data1);
@@ -272,8 +272,8 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
 
         await Task.WhenAll(peer1.WaitUntilConnectedAsync(TimeSpan.FromSeconds(90)), peer2.WaitUntilConnectedAsync(TimeSpan.FromSeconds(90)));
 
-        Assert.Equal(EPeerConnectionState.CONNECTED, peer1.ConnectionState);
-        Assert.Equal(EPeerConnectionState.CONNECTED, peer2.ConnectionState);
+        Assert.Equal(EConnectionState.CONNECTED, peer1.ConnectionState);
+        Assert.Equal(EConnectionState.CONNECTED, peer2.ConnectionState);
 
         var stream1 = peer1.GetStream();
         var stream2 = peer2.GetStream();

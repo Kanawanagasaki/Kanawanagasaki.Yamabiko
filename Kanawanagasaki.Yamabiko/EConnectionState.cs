@@ -1,6 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko;
 
-public enum EPeerConnectionState
+public enum EConnectionState
 {
     HANDSHAKE = 1,
     CONNECTING = 2,
