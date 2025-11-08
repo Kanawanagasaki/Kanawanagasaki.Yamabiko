@@ -21,7 +21,7 @@ public class ReceiverService
             catch (OperationCanceledException) { }
             catch (Exception e)
             {
-                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine($"[System] {e.GetType().Name} | {e.Message}");
             }
         }
 

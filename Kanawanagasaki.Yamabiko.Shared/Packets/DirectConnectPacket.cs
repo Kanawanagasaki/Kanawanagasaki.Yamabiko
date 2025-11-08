@@ -11,7 +11,7 @@ public class DirectConnectPacket : Packet
     public override EPacketType Type => TYPE;
 
     public required uint ConnectionId { get; init; }
-    
+
     private byte[] _publicKey = Array.Empty<byte>();
     public required byte[] PublicKey
     {
@@ -27,6 +27,9 @@ public class DirectConnectPacket : Packet
     public required IPAddress Ip { get; init; }
     public required ushort Port { get; init; }
 
+    public required IPAddress LanIp { get; init; }
+    public required ushort LanPort { get; init; }
+
     protected override int InternalLength()
     {
         int len = 0;
@@ -38,6 +41,10 @@ public class DirectConnectPacket : Packet
         len += BinaryHelper.BytesCount(Ip);
 
         len += BinaryHelper.BytesCount(Port);
+
+        len += BinaryHelper.BytesCount(LanIp);
+
+        len += BinaryHelper.BytesCount(LanPort);
 
         return len;
     }
@@ -53,6 +60,10 @@ public class DirectConnectPacket : Packet
         BinaryHelper.Write(Ip, buffer, ref offset);
 
         BinaryHelper.Write(Port, buffer, ref offset);
+
+        BinaryHelper.Write(LanIp, buffer, ref offset);
+
+        BinaryHelper.Write(LanPort, buffer, ref offset);
     }
 
     public static DirectConnectPacket InternalParse(ReadOnlySpan<byte> buffer)
@@ -69,12 +80,18 @@ public class DirectConnectPacket : Packet
 
             var port = BinaryHelper.ReadUInt16(buffer, ref offset);
 
+            var lanIp = BinaryHelper.ReadIPAddress(buffer, ref offset);
+
+            var lanPort = BinaryHelper.ReadUInt16(buffer, ref offset);
+
             return new DirectConnectPacket
             {
                 ConnectionId = connectionId,
                 PublicKey = publicKey ?? Array.Empty<byte>(),
                 Ip = ip,
-                Port = port
+                Port = port,
+                LanIp = lanIp,
+                LanPort = lanPort
             };
         }
         catch

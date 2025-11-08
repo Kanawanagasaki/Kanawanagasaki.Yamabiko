@@ -5,6 +5,7 @@ using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 
@@ -32,6 +33,7 @@ public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
         _connectionIdChannels = new();
         _connectionIdActivityTimestamps = new();
         _cts = new CancellationTokenSource();
+        Init();
         _receiveLoopTask = Task.Run(ReceiveLoopAsync);
         _cleanupLoopTask = Task.Run(CleanupInactiveChannelsAsync);
     }
@@ -63,6 +65,7 @@ public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
             }
             catch (OperationCanceledException) { }
             catch (ChannelClosedException) { }
+            catch (SocketException e) when (e.SocketErrorCode is SocketError.ConnectionReset) { }
         }
 
         foreach (var channel in _endpointChannels.Values)
@@ -140,8 +143,11 @@ public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
         return await channel.Reader.ReadAsync(ct);
     }
 
+    protected abstract void Init();
     public abstract Task SendAsync(IPEndPoint endpoint, ReadOnlyMemory<byte> buffer, CancellationToken ct);
     protected abstract Task<YamabikoReceiveResult> ReceiveAsync(CancellationToken ct);
+
+    public abstract ushort GetLanPort();
 
     public virtual async ValueTask DisposeAsync()
     {

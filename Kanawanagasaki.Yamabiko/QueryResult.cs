@@ -9,12 +9,14 @@ public class QueryResult
     public IReadOnlyDictionary<Guid, PeerInfo> Peers => _peers.AsReadOnly();
 
     public Guid RequestId { get; }
-    public int Skip { get; }
-    public int Count { get; private set; }
+    public ushort Skip { get; }
+    public byte Count { get; private set; }
     public int Total { get; private set; }
     private readonly ConcurrentDictionary<Guid, PeerInfo> _peers;
 
     private readonly Channel<Packet> _channel;
+
+    public PeerInfo? this[int index] => Peers.Values.FirstOrDefault(x => x.Index == Skip + index);
 
     internal QueryResult(QueryPacket query)
     {
@@ -52,15 +54,15 @@ public class QueryResult
     {
         Total = emptyQuery.Total;
         if (Total < Skip + Count)
-            Count = Total - Skip;
+            Count = (byte)(Total - Skip);
 
         _channel.Writer.TryWrite(emptyQuery);
     }
 
     internal void ProcessEmptyQueryExtraPacket(EmptyQueryExtraResultPacket emptyQueryExtra)
     {
-        if(_peers.TryGetValue(emptyQueryExtra.PeerId, out var peer))
-            foreach(var tagId in emptyQueryExtra.TagsIds)
+        if (_peers.TryGetValue(emptyQueryExtra.PeerId, out var peer))
+            foreach (var tagId in emptyQueryExtra.TagsIds)
                 peer.ClearTag(tagId);
 
         _channel.Writer.TryWrite(emptyQueryExtra);
@@ -81,7 +83,7 @@ public class QueryResult
 
         Total = peer.Total;
         if (Total < Skip + Count)
-            Count = Total - Skip;
+            Count = (byte)(Total - Skip);
 
         _channel.Writer.TryWrite(peer);
     }
@@ -90,7 +92,7 @@ public class QueryResult
     {
         if (_peers.TryGetValue(peerExtra.PeerId, out var queryPeer))
         {
-            if(peerExtra.Data is null)
+            if (peerExtra.Data is null)
                 queryPeer.ClearTag(peerExtra.TagId);
             else
                 queryPeer.SetTag(peerExtra.TagId, peerExtra.Data);

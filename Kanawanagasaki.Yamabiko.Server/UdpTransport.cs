@@ -14,7 +14,7 @@ public class UdpTransport : ITransport
     public UdpTransport(Settings settings)
     {
         _settings = settings;
-        _udp = new UdpClient(_settings.Port);
+        _udp = new UdpClient(new IPEndPoint(IPAddress.Any, _settings.Port));
     }
 
     public async Task<TransportReceiveResult> ReceiveAsync(CancellationToken ct)

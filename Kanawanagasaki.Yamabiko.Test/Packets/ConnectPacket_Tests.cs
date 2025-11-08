@@ -2,6 +2,7 @@
 
 using Kanawanagasaki.Yamabiko.Shared.Packets;
 using System;
+using System.Net;
 using System.Security.Cryptography;
 
 public class ConnectPacket_Tests
@@ -13,7 +14,9 @@ public class ConnectPacket_Tests
             ConnectionId = BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)),
             PublicKey = RandomNumberGenerator.GetBytes(32),
             Password = Random.Shared.NextDouble() < 0.5 ? null : RandomAsciiString(Random.Shared.Next(0, 200)),
-            Extra = Random.Shared.NextDouble() < 0.5 ? null : RandomNumberGenerator.GetBytes(Random.Shared.Next(0, 1000))
+            Extra = Random.Shared.NextDouble() < 0.5 ? null : RandomNumberGenerator.GetBytes(Random.Shared.Next(0, 1000)),
+            LanIp = new IPAddress(RandomNumberGenerator.GetBytes(4)),
+            LanPort = (ushort)Random.Shared.Next(0, ushort.MaxValue)
         };
 
     private static string RandomAsciiString(int length)
@@ -39,6 +42,8 @@ public class ConnectPacket_Tests
         Assert.Equal(packet.PublicKey, parsed.PublicKey);
         Assert.Equal(packet.Password, parsed.Password);
         Assert.Equal(packet.Extra, parsed.Extra);
+        Assert.Equal(packet.LanIp, parsed.LanIp);
+        Assert.Equal(packet.LanPort, parsed.LanPort);
     }
 
     [Fact]

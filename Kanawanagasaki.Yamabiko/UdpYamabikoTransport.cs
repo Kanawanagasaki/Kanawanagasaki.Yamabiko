@@ -8,27 +8,30 @@ using System.Threading.Tasks;
 
 internal class UdpYamabikoTransport : YamabikoTransport
 {
-    internal UdpClient Client { get; }
+    private UdpClient? _client;
 
-    internal UdpYamabikoTransport()
+    protected override void Init()
     {
-        Client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
+        _client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
     }
 
     public override async Task SendAsync(IPEndPoint endpoint, ReadOnlyMemory<byte> buffer, CancellationToken ct)
     {
-        await Client.SendAsync(buffer, endpoint, ct);
+        await _client!.SendAsync(buffer, endpoint, ct);
     }
 
     protected override async Task<YamabikoReceiveResult> ReceiveAsync(CancellationToken ct)
     {
-        var result = await Client.ReceiveAsync(ct);
+        var result = await _client!.ReceiveAsync(ct);
         return new YamabikoReceiveResult(result.Buffer, result.RemoteEndPoint);
     }
 
+    public override ushort GetLanPort()
+        => (ushort)((_client!.Client.LocalEndPoint as IPEndPoint)?.Port ?? 0);
+
     public override async ValueTask DisposeAsync()
     {
-        Client.Dispose();
+        _client!.Dispose();
         await base.DisposeAsync();
     }
 }

@@ -12,7 +12,9 @@ public class DirectConnectPacket_Tests
             ConnectionId = BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)),
             PublicKey = RandomNumberGenerator.GetBytes(32),
             Ip = new IPAddress(RandomNumberGenerator.GetBytes(4)),
-            Port = (ushort)Random.Shared.Next(0, ushort.MaxValue)
+            Port = (ushort)Random.Shared.Next(0, ushort.MaxValue),
+            LanIp = new IPAddress(RandomNumberGenerator.GetBytes(4)),
+            LanPort = (ushort)Random.Shared.Next(0, ushort.MaxValue)
         };
 
     [Fact]
@@ -29,6 +31,8 @@ public class DirectConnectPacket_Tests
         Assert.Equal(packet.PublicKey, parsed.PublicKey);
         Assert.Equal(packet.Ip, parsed.Ip);
         Assert.Equal(packet.Port, parsed.Port);
+        Assert.Equal(packet.LanIp, parsed.LanIp);
+        Assert.Equal(packet.LanPort, parsed.LanPort);
     }
 
     [Fact]

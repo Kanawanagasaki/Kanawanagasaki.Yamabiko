@@ -933,6 +933,9 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
             else
                 return new YamabikoReceiveResult(Array.Empty<byte>(), ServerTransport.Endpoint);
         }
+
+        public override ushort GetLanPort()
+            => 0;
     }
 
     public class ServerTransport : ITransport

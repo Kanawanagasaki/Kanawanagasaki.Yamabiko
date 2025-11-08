@@ -1,5 +1,6 @@
 ﻿namespace Kanawanagasaki.Yamabiko;
 
+using Kanawanagasaki.Yamabiko.Shared.Enums;
 using Kanawanagasaki.Yamabiko.Shared.Packets;
 using Kanawanagasaki.Yamabiko.Tags;
 
@@ -10,6 +11,7 @@ public class PeerInfo
     public string Name { get; }
     public ulong Flags { get; }
     public int Index { get; }
+    public EProtectionLevel ProtectionLevel { get; }
 
     private Dictionary<byte, byte[]> _tags = [];
     public IReadOnlyDictionary<byte, byte[]> Tags => _tags;
@@ -24,6 +26,7 @@ public class PeerInfo
         Name = peer.Name;
         Flags = peer.Flags;
         Index = peer.Index;
+        ProtectionLevel = peer.ProtectionLevel;
 
         _missingTags = [.. peer.ExtraTags];
     }

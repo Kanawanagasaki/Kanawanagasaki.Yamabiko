@@ -5,6 +5,7 @@ using Kanawanagasaki.Yamabiko.Dtls.Enums;
 using Kanawanagasaki.Yamabiko.Dtls.Handshake;
 using Kanawanagasaki.Yamabiko.Shared.Packets;
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
@@ -16,6 +17,8 @@ public class Client : IDisposable
     public IPEndPoint EndPoint { get; }
 
     public long LastActivity { get; private set; } = 0;
+
+    public ConcurrentDictionary<uint, (Client client, long timestamp)> ConnectionIdToLanRedirect { get; } = [];
 
     private ServerHandshakeProcessor? _handshakeProcessor;
 
@@ -64,7 +67,7 @@ public class Client : IDisposable
             {
                 var cert = _settings.Certificate;
                 var ecdsa = _settings.PrivKeyECDsa;
-                if(ecdsa is null)
+                if (ecdsa is null)
                 {
                     Console.WriteLine("[System] Failed to get private key");
                     return;
@@ -372,15 +375,44 @@ public class Client : IDisposable
             return;
         }
 
-        var peerConnect = new PeerConnectPacket
+        if (EndPoint.Address.Equals(peer.Client.EndPoint.Address) && !connect.LanIp.Equals(IPAddress.None))
         {
-            ConnectionId = connect.ConnectionId,
-            PeerId = PeerId,
-            PublicKey = connect.PublicKey,
-            Ip = EndPoint.Address,
-            Port = (ushort)EndPoint.Port
-        };
-        await peer.Client.SendPacketsAsync([peerConnect], ct);
+            Console.WriteLine($"[Client {EndPoint}] Redirecting to LAN network ({connect.LanIp}:{connect.LanPort})");
+
+            if (128 < peer.Client.ConnectionIdToLanRedirect.Count)
+            {
+                var oldRecords = peer.Client.ConnectionIdToLanRedirect
+                                            .OrderBy(kv => kv.Value.timestamp)
+                                            .Take(peer.Client.ConnectionIdToLanRedirect.Count - 64);
+                foreach (var oldRecord in oldRecords)
+                    peer.Client.ConnectionIdToLanRedirect.TryRemove(oldRecord.Key, out _);
+            }
+
+            var tuple = (this, Stopwatch.GetTimestamp());
+            peer.Client.ConnectionIdToLanRedirect.AddOrUpdate(connect.ConnectionId, tuple, (_, _) => tuple);
+
+            var peerConnect = new PeerConnectPacket
+            {
+                ConnectionId = connect.ConnectionId,
+                PeerId = PeerId,
+                PublicKey = connect.PublicKey,
+                Ip = connect.LanIp,
+                Port = connect.LanPort
+            };
+            await peer.Client.SendPacketsAsync([peerConnect], ct);
+        }
+        else
+        {
+            var peerConnect = new PeerConnectPacket
+            {
+                ConnectionId = connect.ConnectionId,
+                PeerId = PeerId,
+                PublicKey = connect.PublicKey,
+                Ip = EndPoint.Address,
+                Port = (ushort)EndPoint.Port
+            };
+            await peer.Client.SendPacketsAsync([peerConnect], ct);
+        }
     }
 
     private async Task ProcessConnectDenyAsync(ConnectDenyPacket connectDeny, CancellationToken ct)
@@ -402,20 +434,40 @@ public class Client : IDisposable
 
     private async Task ProcessDirectConnectAsync(DirectConnectPacket directConnect, CancellationToken ct)
     {
-        var client = _clientsService.GetClientByEndpoint(directConnect.Ip, directConnect.Port);
-        if (client is null)
-            return;
-
-        Console.WriteLine($"[Client {EndPoint}] Direct connection to {directConnect.Ip}:{directConnect.Port}");
-
-        var peerConnect = new DirectConnectPacket
+        if (!directConnect.LanIp.Equals(IPAddress.None) && ConnectionIdToLanRedirect.TryGetValue(directConnect.ConnectionId, out var tuple))
         {
-            ConnectionId = directConnect.ConnectionId,
-            PublicKey = directConnect.PublicKey,
-            Ip = EndPoint.Address,
-            Port = (ushort)EndPoint.Port
-        };
-        await client.SendPacketsAsync([peerConnect], ct);
+            Console.WriteLine($"[Client {EndPoint}] Direct connection to {tuple.client.EndPoint} on LAN");
+
+            var peerConnect = new DirectConnectPacket
+            {
+                ConnectionId = directConnect.ConnectionId,
+                PublicKey = directConnect.PublicKey,
+                Ip = directConnect.LanIp,
+                Port = directConnect.LanPort,
+                LanIp = IPAddress.None,
+                LanPort = 0
+            };
+            await tuple.client.SendPacketsAsync([peerConnect], ct);
+        }
+        else
+        {
+            var client = _clientsService.GetClientByEndpoint(directConnect.Ip, directConnect.Port);
+            if (client is null)
+                return;
+
+            Console.WriteLine($"[Client {EndPoint}] Direct connection to {directConnect.Ip}:{directConnect.Port}");
+
+            var peerConnect = new DirectConnectPacket
+            {
+                ConnectionId = directConnect.ConnectionId,
+                PublicKey = directConnect.PublicKey,
+                Ip = EndPoint.Address,
+                Port = (ushort)EndPoint.Port,
+                LanIp = IPAddress.None,
+                LanPort = 0
+            };
+            await client.SendPacketsAsync([peerConnect], ct);
+        }
     }
 
     public async Task SendPacketsAsync(Packet[] packets, CancellationToken ct)

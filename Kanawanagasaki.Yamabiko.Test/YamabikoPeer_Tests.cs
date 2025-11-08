@@ -396,6 +396,9 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
             var result = await Channel.Reader.ReadAsync(ct);
             return new YamabikoReceiveResult(result.Item2, result.Item1);
         }
+
+        public override ushort GetLanPort()
+            => 0;
     }
 
     public class ServerTransport : ITransport

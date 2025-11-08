@@ -3,6 +3,7 @@
 using Kanawanagasaki.Yamabiko.Shared.Enums;
 using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using System;
+using System.Net;
 
 public class ConnectPacket : Packet
 {
@@ -39,6 +40,9 @@ public class ConnectPacket : Packet
 
     public byte[]? Extra { get; init; }
 
+    public required IPAddress LanIp { get; init; }
+    public required ushort LanPort { get; init; }
+
     protected override int InternalLength()
     {
         int len = 0;
@@ -52,6 +56,10 @@ public class ConnectPacket : Packet
         len += BinaryHelper.BytesCount(PublicKey);
 
         len += BinaryHelper.BytesCount(Extra);
+
+        len += BinaryHelper.BytesCount(LanIp);
+
+        len += BinaryHelper.BytesCount(LanPort);
 
         return len;
     }
@@ -69,6 +77,10 @@ public class ConnectPacket : Packet
         BinaryHelper.Write(PublicKey, buffer, ref offset);
 
         BinaryHelper.Write(Extra, buffer, ref offset);
+
+        BinaryHelper.Write(LanIp, buffer, ref offset);
+
+        BinaryHelper.Write(LanPort, buffer, ref offset);
     }
 
     public static ConnectPacket InternalParse(ReadOnlySpan<byte> buffer)
@@ -87,13 +99,19 @@ public class ConnectPacket : Packet
 
             var extra = BinaryHelper.ReadByteArray(buffer, ref offset);
 
+            var lanIp = BinaryHelper.ReadIPAddress(buffer, ref offset);
+
+            var lanPort = BinaryHelper.ReadUInt16(buffer, ref offset);
+
             return new ConnectPacket
             {
                 PeerId = peerId,
                 ConnectionId = connectionId,
                 Password = password,
                 PublicKey = publicKey ?? Array.Empty<byte>(),
-                Extra = extra
+                Extra = extra,
+                LanIp = lanIp,
+                LanPort = lanPort
             };
         }
         catch
