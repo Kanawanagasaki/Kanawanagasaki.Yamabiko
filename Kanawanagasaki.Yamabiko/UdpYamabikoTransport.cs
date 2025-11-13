@@ -27,7 +27,12 @@ internal class UdpYamabikoTransport : YamabikoTransport
     }
 
     public override IPAddress GetLanIp()
-        => (_client!.Client.LocalEndPoint as IPEndPoint)?.Address ?? base.GetLanIp();
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0);
+        socket.Connect("8.8.8.8", 65530);
+        var endPoint = socket.LocalEndPoint as IPEndPoint;
+        return endPoint?.Address ?? base.GetLanIp();
+    }
 
     public override ushort GetLanPort()
         => (ushort)((_client!.Client.LocalEndPoint as IPEndPoint)?.Port ?? base.GetLanPort());
