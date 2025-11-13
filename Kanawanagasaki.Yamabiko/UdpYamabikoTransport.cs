@@ -26,8 +26,11 @@ internal class UdpYamabikoTransport : YamabikoTransport
         return new YamabikoReceiveResult(result.Buffer, result.RemoteEndPoint);
     }
 
+    public override IPAddress GetLanIp()
+        => (_client!.Client.LocalEndPoint as IPEndPoint)?.Address ?? base.GetLanIp();
+
     public override ushort GetLanPort()
-        => (ushort)((_client!.Client.LocalEndPoint as IPEndPoint)?.Port ?? 0);
+        => (ushort)((_client!.Client.LocalEndPoint as IPEndPoint)?.Port ?? base.GetLanPort());
 
     public override async ValueTask DisposeAsync()
     {

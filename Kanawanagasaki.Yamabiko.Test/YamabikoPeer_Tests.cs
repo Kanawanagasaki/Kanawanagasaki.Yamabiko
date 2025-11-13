@@ -94,8 +94,8 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
         Assert.Equal(EConnectionState.CONNECTED, peer1.ConnectionState);
         Assert.Equal(EConnectionState.CONNECTED, peer2.ConnectionState);
 
-        peer1.Disconnect();
-        peer2.Disconnect();
+        await peer1.DisconnectAsync();
+        await peer2.DisconnectAsync();
 
         await client1.StopAsync();
         await client2.StopAsync();
@@ -156,8 +156,8 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
         var receivedData2 = await peer1.ReceiveUnreliableAsync();
         Assert.Equal(data2, receivedData2);
 
-        peer1.Disconnect();
-        peer2.Disconnect();
+        await peer1.DisconnectAsync();
+        await peer2.DisconnectAsync();
 
         await client1.StopAsync();
         await client2.StopAsync();
@@ -223,8 +223,8 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
         var receivedData2 = await peer1.ReceiveReliableAsync();
         Assert.Equal(data2, receivedData2);
 
-        peer1.Disconnect();
-        peer2.Disconnect();
+        await peer1.DisconnectAsync();
+        await peer2.DisconnectAsync();
 
         await client1.StopAsync();
         await client2.StopAsync();
@@ -339,8 +339,8 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
 
         Assert.Equal(data2, data2Read);
 
-        peer1.Disconnect();
-        peer2.Disconnect();
+        await peer1.DisconnectAsync();
+        await peer2.DisconnectAsync();
 
         await client1.StopAsync();
         await client2.StopAsync();
@@ -380,6 +380,8 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
             _clients = clients;
         }
 
+        protected override void Init() { }
+
         public override async Task SendAsync(IPEndPoint endpoint, ReadOnlyMemory<byte> buffer, CancellationToken ct)
         {
             if (Random.Shared.NextDouble() <= _successChance)
@@ -396,9 +398,6 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
             var result = await Channel.Reader.ReadAsync(ct);
             return new YamabikoReceiveResult(result.Item2, result.Item1);
         }
-
-        public override ushort GetLanPort()
-            => 0;
     }
 
     public class ServerTransport : ITransport

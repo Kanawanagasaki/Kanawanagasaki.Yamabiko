@@ -919,6 +919,8 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
             _successChance = successChance;
         }
 
+        protected override void Init() { }
+
         public override async Task SendAsync(IPEndPoint endpoint, ReadOnlyMemory<byte> buffer, CancellationToken ct)
         {
             if (ServerTransport is not null && Random.Shared.NextDouble() <= _successChance)
@@ -933,9 +935,6 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
             else
                 return new YamabikoReceiveResult(Array.Empty<byte>(), ServerTransport.Endpoint);
         }
-
-        public override ushort GetLanPort()
-            => 0;
     }
 
     public class ServerTransport : ITransport

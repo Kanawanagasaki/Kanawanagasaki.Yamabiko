@@ -19,7 +19,7 @@ public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
 
     private readonly ConcurrentDictionary<IPEndPoint, Channel<ReadOnlyMemory<byte>>> _endpointChannels;
     private readonly ConcurrentDictionary<IPEndPoint, long> _endpointLastActivityTimestamps;
-    private readonly ConcurrentDictionary<uint, Channel<ReadOnlyMemory<byte>>> _connectionIdChannels;
+    private readonly ConcurrentDictionary<uint, Channel<YamabikoReceiveResult>> _connectionIdChannels;
     private readonly ConcurrentDictionary<uint, long> _connectionIdActivityTimestamps;
 
     private readonly CancellationTokenSource _cts;
@@ -53,8 +53,8 @@ public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
                     var connectionId = BinaryHelper.ReadUInt32(connectionIdBytes, ref offset);
 
                     _connectionIdActivityTimestamps.AddOrUpdate(connectionId, now, (_, _) => now);
-                    var channel = _connectionIdChannels.GetOrAdd(connectionId, _ => Channel.CreateBounded<ReadOnlyMemory<byte>>(_boundedChannelOptions));
-                    await channel.Writer.WriteAsync(result.Buffer);
+                    var channel = _connectionIdChannels.GetOrAdd(connectionId, _ => Channel.CreateBounded<YamabikoReceiveResult>(_boundedChannelOptions));
+                    await channel.Writer.WriteAsync(result);
                 }
                 else
                 {
@@ -125,7 +125,7 @@ public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
         return await channel.Reader.ReadAsync(ct);
     }
 
-    internal async Task<ReadOnlyMemory<byte>> ReceiveFromConnectionIdAsync(uint connectionId, CancellationToken ct = default)
+    internal async Task<YamabikoReceiveResult> ReceiveFromConnectionIdAsync(uint connectionId, CancellationToken ct = default)
     {
         if (_receiveLoopTask.IsFaulted)
             ExceptionDispatchInfo.Capture(_receiveLoopTask.Exception).Throw();
@@ -137,7 +137,7 @@ public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
         var channel = _connectionIdChannels.GetOrAdd(connectionId, (uuid) =>
         {
             _connectionIdActivityTimestamps.TryAdd(uuid, Stopwatch.GetTimestamp());
-            return Channel.CreateBounded<ReadOnlyMemory<byte>>(_boundedChannelOptions);
+            return Channel.CreateBounded<YamabikoReceiveResult>(_boundedChannelOptions);
         });
 
         return await channel.Reader.ReadAsync(ct);
@@ -147,7 +147,11 @@ public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
     public abstract Task SendAsync(IPEndPoint endpoint, ReadOnlyMemory<byte> buffer, CancellationToken ct);
     protected abstract Task<YamabikoReceiveResult> ReceiveAsync(CancellationToken ct);
 
-    public abstract ushort GetLanPort();
+    public virtual IPAddress GetLanIp()
+        => IPAddress.None;
+
+    public virtual ushort GetLanPort()
+        => 0;
 
     public virtual async ValueTask DisposeAsync()
     {

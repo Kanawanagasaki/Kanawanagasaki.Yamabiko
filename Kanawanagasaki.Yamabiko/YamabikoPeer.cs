@@ -87,7 +87,7 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         _streamKcp.Start();
 
         Task.Run(ReceiveLoopAsync);
-        Task.Run(PingLoop);
+        Task.Run(PingLoopAsync);
     }
 
     public YamabikoPeer(YamabikoTransport transport, Guid peerId) : this(transport, BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)), peerId) { }
@@ -161,10 +161,10 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         _remoteAesHeader.Padding = PaddingMode.None;
     }
 
-    internal void ProcessConnectDeny(ConnectDenyPacket connectDeny)
+    internal async Task ProcessConnectDenyAsync(ConnectDenyPacket connectDeny, CancellationToken ct)
     {
         DenyReason = connectDeny.Reason;
-        Disconnect();
+        await InternalDisconnectAsync(false, ct);
     }
 
     private async Task ReceiveLoopAsync()
@@ -173,8 +173,8 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         {
             try
             {
-                var buffer = await _transport.ReceiveFromConnectionIdAsync(ConnectionId, _cts.Token);
-                await ProcessBufferAsync(buffer);
+                var receiveResult = await _transport.ReceiveFromConnectionIdAsync(ConnectionId, _cts.Token);
+                await ProcessBufferAsync(receiveResult, _cts.Token);
             }
             catch (Exception e)
             {
@@ -185,7 +185,7 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         ConnectionState = EConnectionState.DISCONNECTED;
     }
 
-    private async Task ProcessBufferAsync(ReadOnlyMemory<byte> buffer)
+    private async Task ProcessBufferAsync(YamabikoReceiveResult receiveResult, CancellationToken ct)
     {
         if (ConnectionState is EConnectionState.DISCONNECTED)
             return;
@@ -194,7 +194,7 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
             return;
 
         int offset = 0;
-        var record = CipherTextRecord.DecryptAndParse(buffer.Span, _remoteAes, _remoteAesIV, _remoteAesHeader, 0, _lastPeerRecordNumber, 4, ref offset);
+        var record = CipherTextRecord.DecryptAndParse(receiveResult.Buffer.Span, _remoteAes, _remoteAesIV, _remoteAesHeader, 0, _lastPeerRecordNumber, 4, ref offset);
         if (_lastPeerRecordNumber < record.RecordNumber)
             _lastPeerRecordNumber = record.RecordNumber;
 
@@ -203,6 +203,7 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         if (ConnectionState is EConnectionState.CONNECTING)
         {
             ConnectionState = EConnectionState.CONNECTED;
+            RemoteEndpoint = receiveResult.RemoteEndPoint;
             _connectedTcs.TrySetResult();
         }
 
@@ -210,18 +211,18 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         {
             case ERecordType.ALERT:
                 var alert = Alert.Parse(record.Buffer.Span);
-                ProcessAlert(alert);
+                await ProcessAlertAsync(alert, ct);
                 break;
             case ERecordType.APPLICATION_DATA:
-                await ProcessRecordAsync(record, _cts.Token);
+                await ProcessRecordAsync(record, ct);
                 break;
         }
     }
 
-    private void ProcessAlert(Alert alert)
+    private async Task ProcessAlertAsync(Alert alert, CancellationToken ct)
     {
         if (alert.Type is EAlertType.CLOSE_NOTIFY)
-            Disconnect();
+            await InternalDisconnectAsync(ConnectionState is EConnectionState.CONNECTING or EConnectionState.CONNECTED, ct);
     }
 
     private async Task ProcessRecordAsync(CipherTextRecord record, CancellationToken ct)
@@ -274,22 +275,30 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         }
     }
 
-    private async Task PingLoop()
+    private async Task PingLoopAsync()
     {
         using var timer = new PeriodicTimer(PingInterval);
-        do
+
+        try
         {
-            await PingAsync(_cts.Token);
+            do
+            {
+                await PingAsync(_cts.Token);
 
-            _reliableKcp.Flush();
-            _streamKcp.Flush();
+                _reliableKcp.Flush();
+                _streamKcp.Flush();
 
-            if (ConnectionState is EConnectionState.CONNECTED && Timeout < Stopwatch.GetElapsedTime(_lastActivity))
-                Disconnect();
+                if (ConnectionState is EConnectionState.CONNECTED && Timeout < Stopwatch.GetElapsedTime(_lastActivity))
+                    break;
+            }
+            while (!_cts.IsCancellationRequested && await timer.WaitForNextTickAsync(_cts.Token) && ConnectionState is not EConnectionState.DISCONNECTED);
         }
-        while (!_cts.IsCancellationRequested && await timer.WaitForNextTickAsync(_cts.Token) && ConnectionState is not EConnectionState.DISCONNECTED);
+        catch (Exception e)
+        {
+            OnError?.Invoke(e);
+        }
 
-        ConnectionState = EConnectionState.DISCONNECTED;
+        await InternalDisconnectAsync(true, default);
     }
 
     internal async Task PingAsync(CancellationToken ct = default)
@@ -302,13 +311,19 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         => EncryptAndSendBufferAsync(EPeerPacketType.UNRELIABLE, buffer, ct);
 
     public async Task<ReadOnlyMemory<byte>> ReceiveUnreliableAsync(CancellationToken ct = default)
-        => await _unreliableChannel.Reader.ReadAsync(ct);
+    {
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
+        return await _unreliableChannel.Reader.ReadAsync(linkedCts.Token);
+    }
 
     public void SendReliable(ReadOnlyMemory<byte> buffer)
         => _reliableKcp.Write(buffer);
 
     public ValueTask<ReadOnlyMemory<byte>> ReceiveReliableAsync(CancellationToken ct = default)
-        => _reliableKcp.ReadAsync(ct);
+    {
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
+        return _reliableKcp.ReadAsync(linkedCts.Token);
+    }
 
     public Stream GetStream()
         => _streamKcp.GetStream();
@@ -379,20 +394,42 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         }
     }
 
-    public void Disconnect()
+    public Task DisconnectAsync(CancellationToken ct = default)
+        => InternalDisconnectAsync(true, ct);
+
+    private async Task InternalDisconnectAsync(bool shouldNotifyRemotePeer, CancellationToken ct)
     {
         ConnectionState = EConnectionState.DISCONNECTED;
+
         _cts.Cancel();
         _connectedTcs.TrySetResult();
+
+        if (shouldNotifyRemotePeer && RemoteEndpoint is not null && _localAes is not null && _localAesIV is not null && _localAesHeader is not null)
+        {
+            var alert = new Alert(EAlertType.CLOSE_NOTIFY);
+            var alertBuffer = new byte[alert.Length()];
+            alert.Write(alertBuffer);
+
+            var record = new CipherTextRecord(alertBuffer)
+            {
+                Type = ERecordType.APPLICATION_DATA,
+                Epoch = 3,
+                RecordNumber = Interlocked.Increment(ref _recordNumberCounter),
+                ConnectionId = _connectionId
+            };
+            var recordBuffer = new byte[record.Length()];
+            record.EncryptAndWrite(recordBuffer, _localAes, _localAesIV, _localAesHeader, true, false);
+            await _transport.SendAsync(RemoteEndpoint, recordBuffer, ct);
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
         if (!_disposed)
         {
-            Disconnect();
-
+            _cts.Cancel();
             _cts.Dispose();
+
             _connectedTcs.TrySetResult();
 
             _localAes?.Dispose();
@@ -422,9 +459,9 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
     {
         if (!_disposed)
         {
-            Disconnect();
-
+            _cts.Cancel();
             _cts.Dispose();
+
             _connectedTcs.TrySetResult();
 
             _localAes?.Dispose();

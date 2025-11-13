@@ -288,7 +288,7 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
             case ConnectDenyPacket connectDeny:
                 {
                     if (_peers.TryGetValue(connectDeny.ConnectionId, out var peer))
-                        peer.ProcessConnectDeny(connectDeny);
+                        await peer.ProcessConnectDenyAsync(connectDeny, ct);
                     break;
                 }
             case PeerConnectPacket peerConnect:
@@ -317,14 +317,13 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
         {
             if (peer.RemoteEndpoint is not null)
             {
-                var lanIp = LanHelper.GetLanAddress();
                 await SendPacketsAsync([new DirectConnectPacket
                 {
                     ConnectionId = peer.ConnectionId,
                     PublicKey = peer.PublicKey,
                     Ip = peer.RemoteEndpoint.Address,
                     Port = (ushort)peer.RemoteEndpoint.Port,
-                    LanIp = lanIp ?? IPAddress.None,
+                    LanIp = _transport.GetLanIp(),
                     LanPort = _transport.GetLanPort()
                 }], false, linkedCts.Token);
             }
@@ -521,7 +520,6 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
         {
             do
             {
-                var lanEndpoint = LanHelper.GetLanAddress();
                 await SendPacketsAsync([new ConnectPacket
                 {
                     ConnectionId = peer.ConnectionId,
@@ -529,7 +527,7 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
                     Password = password,
                     PublicKey = peer.PublicKey,
                     Extra = extra,
-                    LanIp = lanEndpoint ?? IPAddress.None,
+                    LanIp = _transport.GetLanIp(),
                     LanPort = _transport.GetLanPort()
                 }], false, linkedCts.Token);
                 await Task.Delay(ResendInterval, linkedCts.Token);
@@ -539,7 +537,7 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
         catch (OperationCanceledException)
         {
             if (peer.ConnectionState is EConnectionState.HANDSHAKE or EConnectionState.CONNECTING)
-                peer.Disconnect();
+                await peer.DisconnectAsync(ct);
         }
 
         if (peer.ConnectionState is EConnectionState.DISCONNECTED)
