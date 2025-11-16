@@ -278,7 +278,7 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
         var stream1 = peer1.GetStream();
         var stream2 = peer2.GetStream();
 
-        var data1 = Enumerable.Range(0, 1024 * 1024).Select(x => (byte)x).ToArray();
+        var data1 = Enumerable.Range(0, 32 * 1024 * 1024).Select(x => (byte)x).ToArray();
         var data1Read = new byte[data1.Length];
 
         var sendTask1 = Task.Run(async () =>
@@ -288,7 +288,7 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
             int offset = 0;
             while (offset < data1.Length)
             {
-                var len = Math.Min(Random.Shared.Next(2048, 3072), data1.Length - offset);
+                var len = Math.Min(Random.Shared.Next(512, 4096), data1.Length - offset);
                 await stream1.WriteAsync(data1.AsMemory(offset, len));
                 offset += len;
             }
@@ -314,7 +314,7 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
 
         Assert.Equal(data1, data1Read);
 
-        var data2 = RandomNumberGenerator.GetBytes(1024 * 1024);
+        var data2 = RandomNumberGenerator.GetBytes(32 * 1024 * 1024);
         var data2Read = new byte[data2.Length];
 
         var sendTask2 = Task.Run(async () =>

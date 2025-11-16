@@ -7,7 +7,7 @@
 		<WarningsAsErrors>Nullable</WarningsAsErrors>
 
 		<PackageId>Kanawanagasaki.Yamabiko</PackageId>
-		<Version>1.1.2</Version>
+		<Version>1.1.3</Version>
 		<Authors>Kanawanagasaki</Authors>
 		<Description>Peer-to-Peer (P2P) communication library with built‑in encryption, peer discovery/advertising, and reliable transport</Description>
 		<PackageProjectUrl>https://github.com/Kanawanagasaki/Kanawanagasaki.Yamabiko</PackageProjectUrl>
@@ -18,7 +18,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="Kanawanagasaki.KCP" Version="1.0.1" />
+	  <PackageReference Include="Kanawanagasaki.KCP" Version="1.0.2" />
 	</ItemGroup>
 
 	<ItemGroup>
