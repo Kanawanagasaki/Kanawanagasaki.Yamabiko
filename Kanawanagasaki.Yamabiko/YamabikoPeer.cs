@@ -86,6 +86,8 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         _streamKcp.SetMtu(1300);
         _streamKcp.Start();
 
+        _lastActivity = Stopwatch.GetTimestamp();
+
         Task.Run(ReceiveLoopAsync);
         Task.Run(PingLoopAsync);
     }
@@ -287,11 +289,11 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
                 _reliableKcp.Flush();
                 _streamKcp.Flush();
-
-                if (ConnectionState is EConnectionState.CONNECTED && Timeout < Stopwatch.GetElapsedTime(_lastActivity))
-                    break;
             }
-            while (!_cts.IsCancellationRequested && await timer.WaitForNextTickAsync(_cts.Token) && ConnectionState is not EConnectionState.DISCONNECTED);
+            while (!_cts.IsCancellationRequested
+                    && ConnectionState is not EConnectionState.DISCONNECTED
+                    && Stopwatch.GetElapsedTime(_lastActivity) < Timeout
+                    && await timer.WaitForNextTickAsync(_cts.Token));
         }
         catch (Exception e)
         {
