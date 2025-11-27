@@ -239,7 +239,16 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
         _clients[client1transport.Endpoint] = client1transport;
         var client1 = new YamabikoClient(ServerTransport.Endpoint, projectId, client1transport)
         {
-            ValidateCertificatesCallback = (_) => true
+            ValidateCertificatesCallback = (_) => true,
+            KcpOptions = new YamabikoKcpOptions
+            {
+                StreamNoDelay = true,
+                StreamIntervalMs = 10,
+                StreamNoCongestionControl = true,
+                StreamFastResend = 2,
+                StreamSendWindowSize = 1024,
+                StreamRecvWindowSize = 2048
+            }
         };
         await client1.StartAsync();
 
@@ -247,7 +256,16 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
         _clients[client2transport.Endpoint] = client2transport;
         var client2 = new YamabikoClient(ServerTransport.Endpoint, projectId, client2transport)
         {
-            ValidateCertificatesCallback = (_) => true
+            ValidateCertificatesCallback = (_) => true,
+            KcpOptions = new YamabikoKcpOptions
+            {
+                StreamNoDelay = true,
+                StreamIntervalMs = 10,
+                StreamNoCongestionControl = true,
+                StreamFastResend = 2,
+                StreamSendWindowSize = 1024,
+                StreamRecvWindowSize = 2048
+            }
         };
         await client2.StartAsync();
 

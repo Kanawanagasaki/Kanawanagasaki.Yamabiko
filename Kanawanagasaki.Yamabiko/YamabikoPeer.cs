@@ -59,7 +59,7 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
     private bool _disposed;
 
-    public YamabikoPeer(YamabikoTransport transport, uint connectionId, Guid peerId)
+    public YamabikoPeer(YamabikoTransport transport, uint connectionId, Guid peerId, YamabikoKcpOptions options)
     {
         _transport = transport;
         ConnectionId = connectionId;
@@ -74,16 +74,16 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         });
 
         _reliableKcp = new ReliableTransport(this, ConnectionId);
-        _reliableKcp.SetNoDelay(true, 10, 2, false);
-        _reliableKcp.SetWindowSize(128, 256);
-        _reliableKcp.SetMtu(1300);
+        _reliableKcp.SetNoDelay(options.ReliableNoDelay, options.ReliableIntervalMs, options.ReliableFastResend, options.ReliableNoCongestionControl);
+        _reliableKcp.SetWindowSize(options.ReliableSendWindowSize, options.ReliableRecvWindowSize);
+        _reliableKcp.SetMtu(options.ReliableMtu);
         _reliableKcp.Start();
 
         _streamKcp = new ReliableTransport(this, ConnectionId);
         _streamKcp.SetStreamMode(true);
-        _streamKcp.SetInterval(25);
-        _streamKcp.SetWindowSize(1024, 2048);
-        _streamKcp.SetMtu(1300);
+        _streamKcp.SetNoDelay(options.StreamNoDelay, options.StreamIntervalMs, options.StreamFastResend, options.StreamNoCongestionControl);
+        _streamKcp.SetWindowSize(options.StreamSendWindowSize, options.StreamRecvWindowSize);
+        _streamKcp.SetMtu(options.StreamMtu);
         _streamKcp.Start();
 
         _lastActivity = Stopwatch.GetTimestamp();
@@ -92,7 +92,8 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         Task.Run(PingLoopAsync);
     }
 
-    public YamabikoPeer(YamabikoTransport transport, Guid peerId) : this(transport, BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)), peerId) { }
+    public YamabikoPeer(YamabikoTransport transport, Guid peerId, YamabikoKcpOptions options)
+        : this(transport, BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)), peerId, options) { }
 
     internal void ProcessPeerConnect(PeerConnectPacket peerConnect)
     {

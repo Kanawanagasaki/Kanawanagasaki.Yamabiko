@@ -1,13 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net9.0</TargetFramework>
+		<TargetFramework>net10.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<WarningsAsErrors>Nullable</WarningsAsErrors>
 
 		<PackageId>Kanawanagasaki.Yamabiko</PackageId>
-		<Version>1.1.4</Version>
+		<Version>2.0.0</Version>
 		<Authors>Kanawanagasaki</Authors>
 		<Description>Peer-to-Peer (P2P) communication library with built‑in encryption, peer discovery/advertising, and reliable transport</Description>
 		<PackageProjectUrl>https://github.com/Kanawanagasaki/Kanawanagasaki.Yamabiko</PackageProjectUrl>
@@ -18,7 +18,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="Kanawanagasaki.KCP" Version="1.0.2" />
+	  <PackageReference Include="Kanawanagasaki.KCP" Version="2.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>

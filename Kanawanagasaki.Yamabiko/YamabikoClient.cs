@@ -34,6 +34,7 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
     public TimeSpan PingInterval { get; set; } = TimeSpan.FromSeconds(3);
     public TimeSpan ResendInterval { get; set; } = TimeSpan.FromSeconds(1);
     public string? CertificateDomain { get; set; }
+    public YamabikoKcpOptions KcpOptions { get; set; } = new();
 
     public EConnectionState ConnectionState { get; private set; } = EConnectionState.DISCONNECTED;
 
@@ -506,7 +507,7 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
         if (_clientAes is null || _clientIV is null || _clientRecordNumberAes is null)
             throw new DisconnectedException("Not connected to rendezvous server");
 
-        var peer = new YamabikoPeer(_transport, queryPeer.PeerId)
+        var peer = new YamabikoPeer(_transport, queryPeer.PeerId, KcpOptions)
         {
             Timeout = Timeout,
             ResendInterval = ResendInterval,
@@ -736,7 +737,7 @@ public class YamabikoClient : IAsyncDisposable, IDisposable
                 peerConnect.ConnectionId,
                 connectionId =>
                 {
-                    var peer = new YamabikoPeer(_transport, connectionId, peerConnect.PeerId)
+                    var peer = new YamabikoPeer(_transport, connectionId, peerConnect.PeerId, KcpOptions)
                     {
                         Timeout = Timeout,
                         ResendInterval = ResendInterval,

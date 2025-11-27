@@ -15,7 +15,7 @@ public static class CertificateHelper
         if (urlRetrievalTimeout == default)
             urlRetrievalTimeout = TimeSpan.FromSeconds(5);
 
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
 
         foreach (var cert in certificates)
         {
