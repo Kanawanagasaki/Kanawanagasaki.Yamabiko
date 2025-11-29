@@ -2,6 +2,9 @@
 
 using Kanawanagasaki.Yamabiko.Server;
 using Kanawanagasaki.Yamabiko.Shared.Packets;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
@@ -235,38 +238,50 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
     {
         var projectId = Guid.NewGuid();
 
-        var client1transport = new ClientTransport(_serverTransport, _clients, 1.0);
-        _clients[client1transport.Endpoint] = client1transport;
-        var client1 = new YamabikoClient(ServerTransport.Endpoint, projectId, client1transport)
-        {
-            ValidateCertificatesCallback = (_) => true,
-            KcpOptions = new YamabikoKcpOptions
-            {
-                StreamNoDelay = true,
-                StreamIntervalMs = 10,
-                StreamNoCongestionControl = true,
-                StreamFastResend = 2,
-                StreamSendWindowSize = 1024,
-                StreamRecvWindowSize = 2048
-            }
-        };
-        await client1.StartAsync();
+        var client1transport = new ClientTransport(_serverTransport, _clients, 1.0, 10240);
+        var client2transport = new ClientTransport(_serverTransport, _clients, 1.0, 10240);
 
-        var client2transport = new ClientTransport(_serverTransport, _clients, 1.0);
+        _clients[client1transport.Endpoint] = client1transport;
         _clients[client2transport.Endpoint] = client2transport;
-        var client2 = new YamabikoClient(ServerTransport.Endpoint, projectId, client2transport)
-        {
-            ValidateCertificatesCallback = (_) => true,
-            KcpOptions = new YamabikoKcpOptions
+
+        var client1 = new YamabikoClient
+        (
+            ServerTransport.Endpoint,
+            projectId,
+            new YamabikoKcpOptions
             {
-                StreamNoDelay = true,
-                StreamIntervalMs = 10,
-                StreamNoCongestionControl = true,
-                StreamFastResend = 2,
-                StreamSendWindowSize = 1024,
-                StreamRecvWindowSize = 2048
-            }
+                StreamNoCongestionControl = true
+            },
+            client1transport
+        //LoggerFactory.Create(builder =>
+        //{
+        //    builder.AddFilter(_ => true);
+        //    builder.AddProvider(new TestLoggerProvider(_output, ">"));
+        //})
+        )
+        {
+            ValidateCertificatesCallback = (_) => true
         };
+        var client2 = new YamabikoClient
+        (
+            ServerTransport.Endpoint,
+            projectId,
+            new YamabikoKcpOptions
+            {
+                StreamNoCongestionControl = true
+            },
+            client2transport
+        //LoggerFactory.Create(builder =>
+        //{
+        //    builder.AddFilter(_ => true);
+        //    builder.AddProvider(new TestLoggerProvider(_output, "<"));
+        //})
+        )
+        {
+            ValidateCertificatesCallback = (_) => true
+        };
+
+        await client1.StartAsync();
         await client2.StartAsync();
 
         var ad = new Advertisement { Name = "Peer1" };
@@ -301,30 +316,22 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
 
         var sendTask1 = Task.Run(async () =>
         {
-            var start = Stopwatch.GetTimestamp();
-
             int offset = 0;
             while (offset < data1.Length)
             {
                 var len = Math.Min(Random.Shared.Next(512, 4096), data1.Length - offset);
-                await stream1.WriteAsync(data1.AsMemory(offset, len));
+                await stream1.WriteAsync(data1.AsMemory(offset, len)).ConfigureAwait(false);
                 offset += len;
             }
-
-            _output.WriteLine($"Took {Stopwatch.GetElapsedTime(start).TotalMilliseconds:0.000}ms to send 1");
         });
         var receiveTask1 = Task.Run(async () =>
         {
-            var start = Stopwatch.GetTimestamp();
-
             int offset = 0;
             while (offset < data1Read.Length)
             {
-                var read = await stream2.ReadAsync(data1Read.AsMemory(offset, Math.Min(1024, data1Read.Length - offset)));
+                var read = await stream2.ReadAsync(data1Read.AsMemory(offset, Math.Min(1024, data1Read.Length - offset))).ConfigureAwait(false);
                 offset += read;
             }
-
-            _output.WriteLine($"Took {Stopwatch.GetElapsedTime(start).TotalMilliseconds:0.000}ms to receive 1");
         });
 
         await sendTask1;
@@ -337,19 +344,17 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
 
         var sendTask2 = Task.Run(async () =>
         {
-            var start = Stopwatch.GetTimestamp();
-
-            await stream2.WriteAsync(data2);
-
-            _output.WriteLine($"Took {Stopwatch.GetElapsedTime(start).TotalMilliseconds:0.000}ms to send 2");
+            await stream2.WriteAsync(data2).ConfigureAwait(false);
         });
         var receiveTask2 = Task.Run(async () =>
         {
-            var start = Stopwatch.GetTimestamp();
-
-            await stream1.ReadExactlyAsync(data2Read);
-
-            _output.WriteLine($"Took {Stopwatch.GetElapsedTime(start).TotalMilliseconds:0.000}ms to receive 2");
+            //await stream1.ReadExactlyAsync(data2Read).ConfigureAwait(false);
+            int offset = 0;
+            while (offset < data2Read.Length)
+            {
+                var read = await stream1.ReadAsync(data2Read.AsMemory(offset, Math.Min(1024, data2Read.Length - offset))).ConfigureAwait(false);
+                offset += read;
+            }
         });
 
         await sendTask2;
@@ -383,13 +388,14 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
         private static int Port = 12345;
 
         public IPEndPoint Endpoint { get; }
-        public Channel<(IPEndPoint, ReadOnlyMemory<byte>)> Channel { get; } = System.Threading.Channels.Channel.CreateUnbounded<(IPEndPoint, ReadOnlyMemory<byte>)>();
+        public Channel<(IPEndPoint, ReadOnlyMemory<byte>)> Channel { get; }
+            = System.Threading.Channels.Channel.CreateUnbounded<(IPEndPoint, ReadOnlyMemory<byte>)>();
 
         private double _successChance;
         private ServerTransport _serverTransport;
         private Dictionary<IPEndPoint, ClientTransport> _clients;
 
-        public ClientTransport(ServerTransport serverTransport, Dictionary<IPEndPoint, ClientTransport> clients, double successChance)
+        public ClientTransport(ServerTransport serverTransport, Dictionary<IPEndPoint, ClientTransport> clients, double successChance, int recvWindow = 128) : base(recvWindow)
         {
             Endpoint = new IPEndPoint(IPAddress.Loopback, Port++);
 
@@ -404,16 +410,24 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
         {
             if (Random.Shared.NextDouble() <= _successChance)
             {
+                var byteArr = buffer.ToArray();
                 if (endpoint.Equals(ServerTransport.Endpoint))
-                    await _serverTransport.Channel.Writer.WriteAsync((Endpoint, buffer.ToArray()), ct);
+                    await _serverTransport.Channel.Writer.WriteAsync((Endpoint, byteArr), ct).ConfigureAwait(false);
                 else if (_clients.TryGetValue(endpoint, out var client))
-                    await client.Channel.Writer.WriteAsync((Endpoint, buffer.ToArray()), ct);
+                {
+                    if (!client.Channel.Writer.TryWrite((Endpoint, byteArr)))
+                        await client.Channel.Writer.WriteAsync((Endpoint, byteArr), ct).ConfigureAwait(false);
+                }
             }
         }
 
         protected override async Task<YamabikoReceiveResult> ReceiveAsync(CancellationToken ct)
         {
-            var result = await Channel.Reader.ReadAsync(ct);
+            (IPEndPoint, ReadOnlyMemory<byte>) result;
+            if (Channel.Reader.TryRead(out result))
+                return new YamabikoReceiveResult(result.Item2, result.Item1);
+
+            result = await Channel.Reader.ReadAsync(ct).ConfigureAwait(false);
             return new YamabikoReceiveResult(result.Item2, result.Item1);
         }
     }
@@ -433,15 +447,92 @@ public class YamabikoPeer_Tests : IAsyncLifetime, IDisposable
         public async Task SendAsync(IPEndPoint endpoint, ReadOnlyMemory<byte> buffer, CancellationToken ct)
         {
             if (_clients.TryGetValue(endpoint, out var client))
-                await client.Channel.Writer.WriteAsync((Endpoint, buffer.ToArray()), ct);
+                await client.Channel.Writer.WriteAsync((Endpoint, buffer.ToArray()), ct).ConfigureAwait(false);
         }
 
         public async Task<TransportReceiveResult> ReceiveAsync(CancellationToken ct)
         {
-            var result = await Channel.Reader.ReadAsync(ct);
+            var result = await Channel.Reader.ReadAsync(ct).ConfigureAwait(false);
             return new TransportReceiveResult(result.Item2, result.Item1);
         }
 
         public void Dispose() { }
     }
+}
+
+public class TestLogger : ILogger
+{
+    private static int _maxCategoryNameLength = 0;
+    private static readonly Lock _lock = new();
+
+    private readonly ITestOutputHelper _output;
+    private readonly string _delimeter;
+    private readonly string _categoryName;
+    private readonly long _startTimestamp;
+
+    public TestLogger(ITestOutputHelper output, string delimeter, string categoryName, long startTimestamp)
+    {
+        _output = output;
+        _delimeter = delimeter;
+        _categoryName = categoryName.Split(".")[^1];
+        _startTimestamp = startTimestamp;
+
+        _maxCategoryNameLength = Math.Max(_maxCategoryNameLength, _categoryName.Length);
+    }
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        => new NoopDisposable();
+
+    public bool IsEnabled(LogLevel logLevel)
+        => true;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        var elapsed = Stopwatch.GetElapsedTime(_startTimestamp);
+        var elapsedStr = $"{elapsed.TotalSeconds,12:0.0000}s";
+        var logLevelStr = logLevel switch
+        {
+            LogLevel.Trace => "Trace",
+            LogLevel.Debug => "Debug",
+            LogLevel.Information => " Info",
+            LogLevel.Warning => " Warn",
+            LogLevel.Error => "Error",
+            LogLevel.Critical => " Crit",
+            _ => "     "
+        };
+        var text = formatter(state, exception);
+        if (256 < text.Length)
+            text = text.Substring(0, 253) + "...";
+
+        var catName = _categoryName.PadLeft(_maxCategoryNameLength, ' ');
+        var log = $"{elapsedStr} {logLevelStr} {catName} {_delimeter} {text}";
+
+        lock (_lock)
+        {
+            _output.WriteLine(log);
+            Console.WriteLine(log);
+            if (exception is not null)
+            {
+                _output.WriteLine(exception.Message);
+                Console.WriteLine(exception.Message);
+            }
+        }
+    }
+
+    private class NoopDisposable : IDisposable
+    {
+        public void Dispose()
+        {
+        }
+    }
+}
+
+public class TestLoggerProvider(ITestOutputHelper _output, string delimeter) : ILoggerProvider
+{
+    private long _startTimestamp = Stopwatch.GetTimestamp();
+
+    public ILogger CreateLogger(string categoryName)
+        => new TestLogger(_output, delimeter, categoryName, _startTimestamp);
+
+    public void Dispose() { }
 }

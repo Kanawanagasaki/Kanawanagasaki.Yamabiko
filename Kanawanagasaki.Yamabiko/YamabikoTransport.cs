@@ -11,9 +11,6 @@ using System.Threading.Channels;
 
 public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
 {
-    private static readonly BoundedChannelOptions _boundedChannelOptions
-        = new BoundedChannelOptions(128) { FullMode = BoundedChannelFullMode.DropOldest };
-
     private static readonly TimeSpan _cleanupInterval = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan _channelInactivityTimeout = TimeSpan.FromMinutes(5);
 
@@ -26,13 +23,17 @@ public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
     private readonly Task _receiveLoopTask;
     private readonly Task _cleanupLoopTask;
 
-    public YamabikoTransport()
+
+    private readonly BoundedChannelOptions _boundedChannelOptions;
+
+    public YamabikoTransport(int recvWindow)
     {
         _endpointChannels = new();
         _endpointLastActivityTimestamps = new();
         _connectionIdChannels = new();
         _connectionIdActivityTimestamps = new();
         _cts = new CancellationTokenSource();
+        _boundedChannelOptions = new BoundedChannelOptions(recvWindow) { FullMode = BoundedChannelFullMode.DropOldest };
         Init();
         _receiveLoopTask = Task.Run(ReceiveLoopAsync);
         _cleanupLoopTask = Task.Run(CleanupInactiveChannelsAsync);
@@ -54,13 +55,13 @@ public abstract class YamabikoTransport : IAsyncDisposable, IDisposable
 
                     _connectionIdActivityTimestamps.AddOrUpdate(connectionId, now, (_, _) => now);
                     var channel = _connectionIdChannels.GetOrAdd(connectionId, _ => Channel.CreateBounded<YamabikoReceiveResult>(_boundedChannelOptions));
-                    await channel.Writer.WriteAsync(result);
+                    await channel.Writer.WriteAsync(result).ConfigureAwait(false);
                 }
                 else
                 {
                     _endpointLastActivityTimestamps.AddOrUpdate(result.RemoteEndPoint, now, (_, _) => now);
                     var channel = _endpointChannels.GetOrAdd(result.RemoteEndPoint, _ => Channel.CreateBounded<ReadOnlyMemory<byte>>(_boundedChannelOptions));
-                    await channel.Writer.WriteAsync(result.Buffer);
+                    await channel.Writer.WriteAsync(result.Buffer).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) { }

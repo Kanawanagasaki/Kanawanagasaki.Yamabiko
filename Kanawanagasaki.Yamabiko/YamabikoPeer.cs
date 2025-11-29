@@ -6,6 +6,7 @@ using Kanawanagasaki.Yamabiko.Dtls.Helpers;
 using Kanawanagasaki.Yamabiko.Exceptions;
 using Kanawanagasaki.Yamabiko.Shared.Helpers;
 using Kanawanagasaki.Yamabiko.Shared.Packets;
+using Microsoft.Extensions.Logging;
 using System.Buffers;
 using System.Diagnostics;
 using System.Net;
@@ -14,8 +15,6 @@ using System.Threading.Channels;
 
 public class YamabikoPeer : IAsyncDisposable, IDisposable
 {
-    public event Action<Exception>? OnError;
-
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(90);
     public TimeSpan ResendInterval { get; set; } = TimeSpan.FromSeconds(1);
     public TimeSpan PingInterval { get; set; } = TimeSpan.FromSeconds(3);
@@ -57,9 +56,11 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
     private readonly ReliableTransport _reliableKcp;
     private readonly ReliableTransport _streamKcp;
 
+    private readonly ILogger<YamabikoPeer>? _logger;
+
     private bool _disposed;
 
-    public YamabikoPeer(YamabikoTransport transport, uint connectionId, Guid peerId, YamabikoKcpOptions options)
+    public YamabikoPeer(YamabikoTransport transport, uint connectionId, Guid peerId, YamabikoKcpOptions options, ILoggerFactory? loggerFactory)
     {
         _transport = transport;
         ConnectionId = connectionId;
@@ -68,18 +69,25 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         _privateKey = RandomNumberGenerator.GetBytes(32);
         PublicKey = KeyHashHelper.GenerateX25519PublicKey(_privateKey);
 
+        _logger = loggerFactory?.CreateLogger<YamabikoPeer>();
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Created YamabikoPeer (connectionId={connectionId}, peerId={peerId})", ConnectionId, RemotePeerId);
+
         _unreliableChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(new BoundedChannelOptions(128)
         {
             FullMode = BoundedChannelFullMode.DropOldest
         });
 
         _reliableKcp = new ReliableTransport(this, ConnectionId);
+        _reliableKcp.OnLogMessage += ReliableKcp_OnLogMessage;
         _reliableKcp.SetNoDelay(options.ReliableNoDelay, options.ReliableIntervalMs, options.ReliableFastResend, options.ReliableNoCongestionControl);
         _reliableKcp.SetWindowSize(options.ReliableSendWindowSize, options.ReliableRecvWindowSize);
         _reliableKcp.SetMtu(options.ReliableMtu);
         _reliableKcp.Start();
 
         _streamKcp = new ReliableTransport(this, ConnectionId);
+        _streamKcp.OnLogMessage += StreamKcp_OnLogMessage;
         _streamKcp.SetStreamMode(true);
         _streamKcp.SetNoDelay(options.StreamNoDelay, options.StreamIntervalMs, options.StreamFastResend, options.StreamNoCongestionControl);
         _streamKcp.SetWindowSize(options.StreamSendWindowSize, options.StreamRecvWindowSize);
@@ -92,13 +100,28 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         Task.Run(PingLoopAsync);
     }
 
-    public YamabikoPeer(YamabikoTransport transport, Guid peerId, YamabikoKcpOptions options)
-        : this(transport, BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)), peerId, options) { }
+    public YamabikoPeer(YamabikoTransport transport, Guid peerId, YamabikoKcpOptions options, ILoggerFactory? loggerFactory)
+        : this(transport, BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4)), peerId, options, loggerFactory) { }
+
+    private void ReliableKcp_OnLogMessage(string obj)
+    {
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("KCP reliable (message={message}, connectionId={connectionId})", obj, ConnectionId);
+    }
+
+    private void StreamKcp_OnLogMessage(string obj)
+    {
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("KCP stream (message={message}, connectionId={connectionId})", obj, ConnectionId);
+    }
 
     internal void ProcessPeerConnect(PeerConnectPacket peerConnect)
     {
         if (ConnectionState is not EConnectionState.HANDSHAKE)
             return;
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Information))
+            _logger.LogInformation("Connecting to a remote peer (connectionId={connectionId}, peerId={peerId}, ip={ip}, port={port})", peerConnect.ConnectionId, peerConnect.PeerId, peerConnect.Ip, peerConnect.Port);
 
         ConnectionState = EConnectionState.CONNECTING;
         DeriveKeys(peerConnect.PublicKey);
@@ -109,6 +132,9 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
     {
         if (ConnectionState is not EConnectionState.HANDSHAKE)
             return;
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Information))
+            _logger.LogInformation("Connecting to a remote peer directly (connectionId={connectionId}, ip={ip}, port={port})", directConnect.ConnectionId, directConnect.Ip, directConnect.Port);
 
         ConnectionState = EConnectionState.CONNECTING;
         DeriveKeys(directConnect.PublicKey);
@@ -124,9 +150,6 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
         var transcriptInput = iAmPeer1 ? PublicKey.Concat(remotePublicKey).ToArray() : remotePublicKey.Concat(PublicKey).ToArray();
         var transcriptHash = SHA256.HashData(transcriptInput);
-
-        var peer1HandshakeTraffic = KeyHashHelper.DeriveSecret(handshakeSecret, "c hs traffic", transcriptHash, KeyHashHelper.DTLS_PREFIX);
-        var peer2HandshakeTraffic = KeyHashHelper.DeriveSecret(handshakeSecret, "s hs traffic", transcriptHash, KeyHashHelper.DTLS_PREFIX);
 
         var derived = KeyHashHelper.HKDF_ExpandLabel(handshakeSecret, "derived", null, 32, KeyHashHelper.DTLS_PREFIX);
         var masterSecret = KeyHashHelper.HKDF_Extract(null, derived);
@@ -166,26 +189,43 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
     internal async Task ProcessConnectDenyAsync(ConnectDenyPacket connectDeny, CancellationToken ct)
     {
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Information))
+            _logger.LogInformation("Connection to peer denied (connectionId={connectionId}, reason={reason})", connectDeny.ConnectionId, connectDeny.Reason);
+
         DenyReason = connectDeny.Reason;
         await InternalDisconnectAsync(false, ct);
     }
 
     private async Task ReceiveLoopAsync()
     {
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Receive loop started (connectionId={connectionId})", ConnectionId);
+
         while (!_cts.IsCancellationRequested && ConnectionState is not EConnectionState.DISCONNECTED)
         {
             try
             {
                 var receiveResult = await _transport.ReceiveFromConnectionIdAsync(ConnectionId, _cts.Token);
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+                    _logger.LogTrace("Received from transport (connectionId={connectionId}, bytes={bytes}, remote={remote})", ConnectionId, receiveResult.Buffer.Length, receiveResult.RemoteEndPoint);
                 await ProcessBufferAsync(receiveResult, _cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug("Receive loop operation cancelled (connectionId={connectionId})", ConnectionId);
             }
             catch (Exception e)
             {
-                OnError?.Invoke(e);
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Error))
+                    _logger.LogError(e, "Unhandled exception in ReceiveLoop (connectionId={connectionId})", ConnectionId);
             }
         }
 
         ConnectionState = EConnectionState.DISCONNECTED;
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Receive loop stopped (connectionId={connectionId})", ConnectionId);
     }
 
     private async Task ProcessBufferAsync(YamabikoReceiveResult receiveResult, CancellationToken ct)
@@ -195,6 +235,9 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
         if (_remoteAes is null || _remoteAesIV is null || _remoteAesHeader is null)
             return;
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+            _logger.LogTrace("Processing buffer (connectionId={connectionId}, length={length})", ConnectionId, receiveResult.Buffer.Length);
 
         int offset = 0;
         var record = CipherTextRecord.DecryptAndParse(receiveResult.Buffer.Span, _remoteAes, _remoteAesIV, _remoteAesHeader, 0, _lastPeerRecordNumber, 4, ref offset);
@@ -208,7 +251,13 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
             ConnectionState = EConnectionState.CONNECTED;
             RemoteEndpoint = receiveResult.RemoteEndPoint;
             _connectedTcs.TrySetResult();
+
+            if (_logger is not null && _logger.IsEnabled(LogLevel.Information))
+                _logger.LogInformation("Remote peer connected (connectionId={connectionId}, peerId={peerId}, remote={remote})", ConnectionId, RemotePeerId, RemoteEndpoint);
         }
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+            _logger.LogTrace("Processed record (type={type}, recordNumber={recordNumber})", record.Type, record.RecordNumber);
 
         switch (record.Type)
         {
@@ -224,6 +273,9 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
     private async Task ProcessAlertAsync(Alert alert, CancellationToken ct)
     {
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Processing alert (connectionId={connectionId}, type={type})", ConnectionId, alert.Type);
+
         if (alert.Type is EAlertType.CLOSE_NOTIFY)
             await InternalDisconnectAsync(ConnectionState is EConnectionState.CONNECTING or EConnectionState.CONNECTED, ct);
     }
@@ -233,24 +285,41 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         if (record.Buffer.Length == 0)
             return;
 
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+            _logger.LogTrace("Processing peer record (connectionId={connectionId}, length={length})", ConnectionId, record.Buffer.Length);
+
         switch ((EPeerPacketType)record.Buffer.Span[0])
         {
             case EPeerPacketType.PING:
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+                    _logger.LogTrace("Received PING (connectionId={connectionId})", ConnectionId);
                 await ProcessPingAsync(record.Buffer[1..], ct);
                 break;
             case EPeerPacketType.PONG:
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+                    _logger.LogTrace("Received PONG (connectionId={connectionId})", ConnectionId);
                 ProcessPong();
                 break;
             case EPeerPacketType.UNRELIABLE:
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+                    _logger.LogTrace("Received UNRELIABLE (connectionId={connectionId}, bytes={bytes})", ConnectionId, record.Buffer.Length - 1);
                 await _unreliableChannel.Writer.WriteAsync(record.Buffer[1..], ct);
                 break;
             case EPeerPacketType.RELIABLE:
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+                    _logger.LogTrace("Received RELIABLE (connectionId={connectionId}, bytes={bytes})", ConnectionId, record.Buffer.Length - 1);
                 _reliableKcp.Input(record.Buffer[1..]);
                 break;
             case EPeerPacketType.STREAM:
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+                    _logger.LogTrace("Received STREAM (connectionId={connectionId}, bytes={bytes})", ConnectionId, record.Buffer.Length - 1);
                 _streamKcp.Input(record.Buffer[1..]);
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+                    _logger.LogTrace("Received STREAM, input complete (connectionId={connectionId}, bytes={bytes})", ConnectionId, record.Buffer.Length - 1);
                 break;
             default:
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Warning))
+                    _logger.LogWarning("Unknown peer packet type (connectionId={connectionId}, type={type})", ConnectionId, record.Buffer.Span[0]);
                 break;
         }
     }
@@ -266,6 +335,9 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         _pingReceiveTimestamps[1] = _pingReceiveTimestamps[0];
         _pingReceiveTimestamps[0] = Stopwatch.GetTimestamp();
 
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+            _logger.LogTrace("Replying with PONG (connectionId={connectionId})", ConnectionId);
+
         await EncryptAndSendBufferAsync(EPeerPacketType.PONG, buffer, ct);
     }
 
@@ -275,12 +347,17 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
         {
             Ping = Stopwatch.GetElapsedTime(_pingLastTime);
             _pingLastTime = -1;
+            if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+                _logger.LogTrace("Last activity update (connectionId={connectionId}, pingMs={ping})", ConnectionId, Ping.TotalMilliseconds);
         }
     }
 
     private async Task PingLoopAsync()
     {
         using var timer = new PeriodicTimer(PingInterval);
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Ping loop started (connectionId={connectionId}, intervalMs={interval})", ConnectionId, PingInterval.TotalMilliseconds);
 
         try
         {
@@ -296,36 +373,66 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
                     && Stopwatch.GetElapsedTime(_lastActivity) < Timeout
                     && await timer.WaitForNextTickAsync(_cts.Token));
         }
+        catch (OperationCanceledException)
+        {
+            if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("Ping loop operation cancelled (connectionId={connectionId})", ConnectionId);
+        }
         catch (Exception e)
         {
-            OnError?.Invoke(e);
+            if (_logger is not null && _logger.IsEnabled(LogLevel.Error))
+                _logger.LogError(e, "Unhandled exception in PingLoop (connectionId={connectionId})", ConnectionId);
         }
 
         await InternalDisconnectAsync(true, default);
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("Ping loop stopped (connectionId={connectionId})", ConnectionId);
     }
 
     internal async Task PingAsync(CancellationToken ct = default)
     {
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+            _logger.LogTrace("Sending PING (connectionId={connectionId})", ConnectionId);
+
         _pingLastTime = Stopwatch.GetTimestamp();
         await EncryptAndSendBufferAsync(EPeerPacketType.PING, Array.Empty<byte>(), ct);
     }
 
     public Task SendUnreliableAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
-        => EncryptAndSendBufferAsync(EPeerPacketType.UNRELIABLE, buffer, ct);
+    {
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+            _logger.LogTrace("Sending unreliable (connectionId={connectionId}, len={len})", ConnectionId, buffer.Length);
+        return EncryptAndSendBufferAsync(EPeerPacketType.UNRELIABLE, buffer, ct);
+    }
 
     public async Task<ReadOnlyMemory<byte>> ReceiveUnreliableAsync(CancellationToken ct = default)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
-        return await _unreliableChannel.Reader.ReadAsync(linkedCts.Token);
+        var buffer = await _unreliableChannel.Reader.ReadAsync(linkedCts.Token);
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+            _logger.LogTrace("Received unreliable (connectionId={connectionId}, len={len})", ConnectionId, buffer.Length);
+
+        return buffer;
     }
 
     public void SendReliable(ReadOnlyMemory<byte> buffer)
-        => _reliableKcp.Write(buffer);
+    {
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+            _logger.LogTrace("Sending reliable (connectionId={connectionId}, len={len})", ConnectionId, buffer.Length);
+        _reliableKcp.Write(buffer);
+    }
 
-    public ValueTask<ReadOnlyMemory<byte>> ReceiveReliableAsync(CancellationToken ct = default)
+    public async ValueTask<ReadOnlyMemory<byte>> ReceiveReliableAsync(CancellationToken ct = default)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
-        return _reliableKcp.ReadAsync(linkedCts.Token);
+        var buffer = await _reliableKcp.ReadAsync(linkedCts.Token);
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+            _logger.LogTrace("Received reliable (connectionId={connectionId}, len={len})", ConnectionId, buffer.Length);
+
+        return buffer;
     }
 
     public Stream GetStream()
@@ -359,6 +466,9 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
                 ConnectionId = _connectionId
             };
 
+            if (_logger is not null && _logger.IsEnabled(LogLevel.Trace))
+                _logger.LogTrace("Sending encrypted record (connectionId={connectionId}, packetType={packetType}, recordNumber={recordNumber}, len={len}, remote={remote})", ConnectionId, packetType, record.RecordNumber, buffer.Length, RemoteEndpoint);
+
             var recordLength = record.Length(true, false);
             var recordRentedBuffer = ArrayPool<byte>.Shared.Rent(recordLength);
             try
@@ -371,6 +481,11 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
             {
                 ArrayPool<byte>.Shared.Return(recordRentedBuffer);
             }
+        }
+        catch (Exception e)
+        {
+            if (_logger is not null && _logger.IsEnabled(LogLevel.Error))
+                _logger.LogError(e, "Failed to encrypt and send buffer (connectionId={connectionId}, packetType={packetType})", ConnectionId, packetType);
         }
         finally
         {
@@ -387,9 +502,20 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
             var timeoutTask = Task.Delay(timeout, linkedCts.Token);
             var first = await Task.WhenAny(timeoutTask, _connectedTcs.Task);
             if (first == timeoutTask)
+            {
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Warning))
+                    _logger.LogWarning("WaitUntilConnected timed out (connectionId={connectionId})", ConnectionId);
                 throw new TimeoutException("Connection has timed out");
+            }
             if (ConnectionState is EConnectionState.DISCONNECTED)
+            {
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Warning))
+                    _logger.LogWarning("WaitUntilConnected detected disconnected state (connectionId={connectionId})", ConnectionId);
                 throw new DisconnectedException("Peer disconnected");
+            }
+
+            if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("WaitUntilConnected success (connectionId={connectionId})", ConnectionId);
         }
         finally
         {
@@ -402,6 +528,9 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
     private async Task InternalDisconnectAsync(bool shouldNotifyRemotePeer, CancellationToken ct)
     {
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Information))
+            _logger.LogInformation("Disconnecting (connectionId={connectionId})", ConnectionId);
+
         ConnectionState = EConnectionState.DISCONNECTED;
 
         _cts.Cancel();
@@ -409,27 +538,49 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
 
         if (shouldNotifyRemotePeer && RemoteEndpoint is not null && _localAes is not null && _localAesIV is not null && _localAesHeader is not null)
         {
-            var alert = new Alert(EAlertType.CLOSE_NOTIFY);
-            var alertBuffer = new byte[alert.Length()];
-            alert.Write(alertBuffer);
-
-            var record = new CipherTextRecord(alertBuffer)
+            try
             {
-                Type = ERecordType.APPLICATION_DATA,
-                Epoch = 3,
-                RecordNumber = Interlocked.Increment(ref _recordNumberCounter),
-                ConnectionId = _connectionId
-            };
-            var recordBuffer = new byte[record.Length()];
-            record.EncryptAndWrite(recordBuffer, _localAes, _localAesIV, _localAesHeader, true, false);
-            await _transport.SendAsync(RemoteEndpoint, recordBuffer, ct);
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug("Sending close_notify alert to remote (connectionId={connectionId}, remote={remote})", ConnectionId, RemoteEndpoint);
+
+                var alert = new Alert(EAlertType.CLOSE_NOTIFY);
+                var alertBuffer = new byte[alert.Length()];
+                alert.Write(alertBuffer);
+
+                var record = new CipherTextRecord(alertBuffer)
+                {
+                    Type = ERecordType.APPLICATION_DATA,
+                    Epoch = 3,
+                    RecordNumber = Interlocked.Increment(ref _recordNumberCounter),
+                    ConnectionId = _connectionId
+                };
+                var recordBuffer = new byte[record.Length()];
+                record.EncryptAndWrite(recordBuffer, _localAes, _localAesIV, _localAesHeader, true, false);
+                await _transport.SendAsync(RemoteEndpoint, recordBuffer, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug("Sending close_notify cancelled (connectionId={connectionId})", ConnectionId);
+            }
+            catch (Exception e)
+            {
+                if (_logger is not null && _logger.IsEnabled(LogLevel.Error))
+                    _logger.LogError(e, "Failed to notify remote on disconnect (connectionId={connectionId})", ConnectionId);
+            }
         }
+
+        if (_logger is not null && _logger.IsEnabled(LogLevel.Information))
+            _logger.LogInformation("Disconnected (connectionId={connectionId})", ConnectionId);
     }
 
     public async ValueTask DisposeAsync()
     {
         if (!_disposed)
         {
+            _reliableKcp.OnLogMessage += ReliableKcp_OnLogMessage;
+            _streamKcp.OnLogMessage += StreamKcp_OnLogMessage;
+
             _cts.Cancel();
             _cts.Dispose();
 
@@ -462,6 +613,9 @@ public class YamabikoPeer : IAsyncDisposable, IDisposable
     {
         if (!_disposed)
         {
+            _reliableKcp.OnLogMessage += ReliableKcp_OnLogMessage;
+            _streamKcp.OnLogMessage += StreamKcp_OnLogMessage;
+
             _cts.Cancel();
             _cts.Dispose();
 

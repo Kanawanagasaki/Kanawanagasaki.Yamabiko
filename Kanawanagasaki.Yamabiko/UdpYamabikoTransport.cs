@@ -6,7 +6,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
-internal class UdpYamabikoTransport : YamabikoTransport
+internal class UdpYamabikoTransport(int recvWindow) : YamabikoTransport(recvWindow)
 {
     private UdpClient? _client;
 

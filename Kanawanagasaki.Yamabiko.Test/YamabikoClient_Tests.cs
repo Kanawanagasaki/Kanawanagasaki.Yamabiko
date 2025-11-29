@@ -911,7 +911,7 @@ public class YamabikoClient_Tests : IAsyncLifetime, IDisposable
 
         private double _successChance;
 
-        public ClientTransport(ServerTransport serverTransport, double successChance)
+        public ClientTransport(ServerTransport serverTransport, double successChance) : base(128)
         {
             Endpoint = new IPEndPoint(IPAddress.Loopback, Port++);
             ServerTransport = serverTransport;
