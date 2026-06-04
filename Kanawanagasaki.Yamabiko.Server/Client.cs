@@ -309,7 +309,7 @@ public class Client : IDisposable
             var emptyRes = new EmptyQueryExtraResultPacket
             {
                 RequestId = queryExtra.RequestId,
-                PeerId = PeerId,
+                PeerId = queryExtra.PeerId,
                 TagsIds = queryExtra.TagsIds
             };
             await SendPacketsAsync([emptyRes], ct);
@@ -322,7 +322,7 @@ public class Client : IDisposable
             var emptyRes = new EmptyQueryExtraResultPacket
             {
                 RequestId = queryExtra.RequestId,
-                PeerId = PeerId,
+                PeerId = queryExtra.PeerId,
                 TagsIds = queryExtra.TagsIds
             };
             return;
@@ -334,7 +334,7 @@ public class Client : IDisposable
             extras.Add(new PeerExtraPacket
             {
                 RequestId = queryExtra.RequestId,
-                PeerId = PeerId,
+                PeerId = peer.Client.PeerId,
                 TagId = tag,
                 Data = peer.GetExtra(tag)
             });
